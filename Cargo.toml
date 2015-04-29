@@ -5,3 +5,6 @@ authors = ["harrison <notallama@gmail.com>"]
 
 [dependencies.protobuf]
 git = "https://github.com/stepancheg/rust-protobuf.git"
+
+[dependencies]
+rust-crypto = "*"

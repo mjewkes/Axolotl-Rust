@@ -1,4 +1,5 @@
 
+extern crate crypto;
 
 extern crate protobuf;
 mod protobuffs;
