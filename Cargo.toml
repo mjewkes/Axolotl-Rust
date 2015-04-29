@@ -1,0 +1,4 @@
+[package]
+name = "Axolotl-Rust"
+version = "0.0.1"
+authors = ["harrison <notallama@gmail.com>"]
