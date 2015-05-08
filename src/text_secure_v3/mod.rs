@@ -67,7 +67,6 @@ impl axolotl::Axolotl for TextSecureV3{
 	type PlainText = PlainText;
 	type CipherText = CipherTextMacAndVersion;
 
-
 	fn kdf_initial(ab0 : &<Self::IdentityKey as DH>::Shared, a0b : &<Self::IdentityKey as DH>::Shared, a0b0 : &<Self::IdentityKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey){
 		unimplemented!();
 	}
