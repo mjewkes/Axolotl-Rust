@@ -167,7 +167,18 @@ impl <T:Axolotl> AxolotlState<T> {
 
 		(header, ciphertext)
 	}
+	
 	pub fn decrypt(&mut self, header : &AxolotlHeader<T>, ciphertext : &T::CipherText) -> Option<T::PlainText> {
+		let mut self_clone = Clone::clone(self);
+		let result = self_clone.try_decrypt(header,ciphertext);
+		
+		if let Some(_) = result {
+			*self = self_clone
+		}
+
+		result
+	}
+	fn try_decrypt(&mut self, header : &AxolotlHeader<T>, ciphertext : &T::CipherText) -> Option<T::PlainText> {
 		let message_key_or_none;
 		{
 			let receive_chain = self.get_or_create_receive_chain(&header.ratchet_key);
