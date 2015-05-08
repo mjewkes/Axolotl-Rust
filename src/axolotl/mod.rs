@@ -40,10 +40,19 @@ pub trait DH {
 	fn shared(mine : &Self::Private, theirs : &Self::Public) -> Self::Shared;
 }
 
-#[derive(Clone)]
+
 pub struct DHKeyPair<T> where T:DH {
 	pub key : T::Private,
 	pub public : T::Public,
+}
+
+impl <T:DH> Clone for DHKeyPair<T> {
+	fn clone(&self) -> Self {
+		DHKeyPair {
+			key : self.key.clone(),
+			public : self.public.clone(),
+		}
+	}
 }
 
 pub struct DHExchangedPair<T> where T:DH {
@@ -51,25 +60,34 @@ pub struct DHExchangedPair<T> where T:DH {
 	pub theirs : T::Public,
 }
 
-#[derive(Clone)]
 pub struct AxolotlState<T> where T:Axolotl {
 	pub root_key : T::RootKey,
 	pub identity_key_local  : <T::IdentityKey as DH>::Private,
 	pub identity_key_remote : <T::IdentityKey as DH>::Public,
 	pub message_number_send : u32,
-	pub message_number_recv : u32,
-	pub message_number_prev : u32,
 
 	pub chain_key_send : T::ChainKey,
 	pub ratchet_key_send : DHKeyPair<T::RatchetKey>,
 
 	pub receive_chains : Vec<ReceiveChain<T>>,
 
-	pub ratchet_flag : bool,
 
 }
 
-#[derive(Clone)]
+impl <T:Axolotl> Clone for AxolotlState<T> {
+	fn clone(&self) -> Self {
+		AxolotlState {
+			root_key : self.root_key.clone(),
+			identity_key_local : self.identity_key_local.clone(),
+			identity_key_remote : self.identity_key_remote.clone(),
+			message_number_send : self.message_number_send,
+			chain_key_send : self.chain_key_send.clone(),
+			ratchet_key_send : Clone::clone(&self.ratchet_key_send),
+			receive_chains : self.receive_chains.clone(),
+		}
+	}
+}
+
 pub struct ReceiveChain<T> where T:Axolotl {
 	pub chain_key : T::ChainKey,
 	pub chain_key_index : u32,
@@ -77,9 +95,19 @@ pub struct ReceiveChain<T> where T:Axolotl {
 	pub message_keys : Vec<(u32,T::MessageKey)>,
 }
 
+impl <T:Axolotl> Clone for ReceiveChain<T> {
+	fn clone(&self) -> Self {
+		ReceiveChain {
+			chain_key : self.chain_key.clone(),
+			chain_key_index : self.chain_key_index,
+			ratchet_key : self.ratchet_key.clone(),
+			message_keys : self.message_keys.clone(),
+		}
+	}
+}
+
 pub struct AxolotlHeader<T> where T:Axolotl {
 	pub message_number : u32,
-	pub message_number_prev : u32,
 	pub ratchet_key : <T::RatchetKey as DH>::Public,
 }
 
@@ -128,7 +156,6 @@ impl <T:Axolotl> AxolotlState<T> {
 
 		let header = AxolotlHeader {
 			message_number : self.message_number_send,
-			message_number_prev : self.message_number_prev,
 			ratchet_key : self.ratchet_key_send.public.clone(),
 		};
 		self.chain_key_send = new_chain_key;
@@ -137,8 +164,11 @@ impl <T:Axolotl> AxolotlState<T> {
 		(header, ciphertext)
 	}
 	pub fn decrypt(&mut self, header : &AxolotlHeader<T>, ciphertext : &T::CipherText) -> Option<T::PlainText> {
-		let receive_chain = self.get_or_create_receive_chain(&header.ratchet_key);
-		let message_key_or_none = receive_chain.get_or_create_message_key(header.message_number);
+		let message_key_or_none;
+		{
+			let receive_chain = self.get_or_create_receive_chain(&header.ratchet_key);
+			message_key_or_none = receive_chain.get_or_create_message_key(header.message_number);
+		}
 
 		if let None = message_key_or_none  {
 			return None;
@@ -176,7 +206,6 @@ impl <T:Axolotl> AxolotlState<T> {
 
 				self.receive_chains.insert(0, new_receive_chain);
 				self.receive_chains.truncate(truncate_to);
-				self.message_number_prev = self.message_number_send;
 				self.message_number_send = 0;
 				self.root_key = root_key;
 				self.chain_key_send = chain_key_send;
