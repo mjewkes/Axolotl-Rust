@@ -1,6 +1,7 @@
 
 use std::option::{Option};
 use std::vec::{Vec};
+//use core::clone::{Clone};
 
 pub trait Axolotl {
 	type IdentityKey : DH;
@@ -13,6 +14,7 @@ pub trait Axolotl {
 	type PlainText;
 	type CipherText;
 
+
 	fn kdf_initial(ab0 : &<Self::IdentityKey as DH>::Shared, a0b : &<Self::IdentityKey as DH>::Shared, a0b0 : &<Self::IdentityKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey);
 
 	// This is the DH future secrecy ratchet/
@@ -21,8 +23,8 @@ pub trait Axolotl {
 	//This is the SCIMP style forward secrecy chain key iteration.
 	fn kdf_message(chain_key : &Self::ChainKey) -> (Self::ChainKey, Self::MessageKey);
 
-	fn encode_message(message_key : &Self::MessageKey, plaintext : &Self::PlainText) -> Self::CipherText;
-	fn decode_message(message_key : &Self::MessageKey, cyphertext : &Self::CipherText) -> Option<Self::PlainText>;
+	fn encode_message(message_key : &Self::MessageKey, identity_key_local : &<Self::IdentityKey as DH>::Private, plaintext : &Self::PlainText) -> Self::CipherText;
+	fn decode_message(message_key : &Self::MessageKey, identity_key_remote : &<Self::IdentityKey as DH>::Public, cyphertext : &Self::CipherText) -> Option<Self::PlainText>;
 
 	fn ratchet_keys_are_equal(key0 : &<Self::RatchetKey as DH>::Public, key1 : &<Self::RatchetKey as DH>::Public) -> bool;
 	fn generate_ratchet_key_pair() -> DHKeyPair<Self::RatchetKey>;
@@ -34,7 +36,7 @@ pub trait Axolotl {
 }
 
 pub trait DH {
-	type Private;
+	type Private : Clone;
 	type Public : Clone;
 	type Shared;
 
@@ -42,6 +44,7 @@ pub trait DH {
 	fn shared(mine : &Self::Private, theirs : &Self::Public) -> Self::Shared;
 }
 
+#[derive(Clone)]
 pub struct DHKeyPair<T> where T:DH {
 	pub key : T::Private,
 	pub public : T::Public,
@@ -52,9 +55,10 @@ pub struct DHExchangedPair<T> where T:DH {
 	pub theirs : T::Public,
 }
 
+#[derive(Clone)]
 pub struct AxolotlState<T> where T:Axolotl {
 	pub root_key : T::RootKey,
-	pub identity_key_local  : <T::IdentityKey as DH>::Public,
+	pub identity_key_local  : <T::IdentityKey as DH>::Private,
 	pub identity_key_remote : <T::IdentityKey as DH>::Public,
 	pub message_number_send : u32,
 	pub message_number_recv : u32,
@@ -69,6 +73,7 @@ pub struct AxolotlState<T> where T:Axolotl {
 
 }
 
+#[derive(Clone)]
 pub struct ReceiveChain<T> where T:Axolotl {
 	pub chain_key : T::ChainKey,
 	pub chain_key_index : u32,
@@ -115,8 +120,15 @@ impl <T:Axolotl> ReceiveChain<T> {
 impl <T:Axolotl> AxolotlState<T> {
 
 	pub fn encrypt(&mut self, plaintext : &T::PlainText) -> (AxolotlHeader<T>, T::CipherText) {
+		let mut self_clone = Clone::clone(self);
+		let result = self_clone.try_encrypt(plaintext);
+		*self = self_clone;
+		result
+	}
+
+	fn try_encrypt(&mut self, plaintext : &T::PlainText) -> (AxolotlHeader<T>, T::CipherText) {
 		let (new_chain_key, message_key) = T::kdf_message(&self.chain_key_send);
-		let ciphertext = T::encode_message(&message_key, plaintext);
+		let ciphertext = T::encode_message(&message_key, &self.identity_key_local, plaintext);
 
 		let header = AxolotlHeader {
 			message_number : self.message_number_send,
@@ -137,7 +149,7 @@ impl <T:Axolotl> AxolotlState<T> {
 		}
 		let message_key = message_key_or_none.unwrap();
 
-		T::decode_message(&message_key, ciphertext)
+		T::decode_message(&message_key, &self.identity_key_remote, ciphertext)
 	}
 
 	fn get_or_create_receive_chain(&mut self, ratchet_key_theirs : &<T::RatchetKey as DH>::Public) -> &mut ReceiveChain<T> {
