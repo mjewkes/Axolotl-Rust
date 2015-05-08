@@ -1,1 +1,2 @@
-pub mod curve25519;
+pub mod aes_cbc;
+pub mod hmac;
