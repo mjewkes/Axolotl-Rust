@@ -88,10 +88,22 @@ impl axolotl::Axolotl for TextSecureV3{
 		if ciphertext.version != 3{
 			return None;
 		}
+		{
+			//HMAC
+			let ref data = ciphertext.cipher_text;
+			let their_mac = ciphertext.mac;
+			let our_mac = 
+				hmac::hmac_sha256(&data,&message_key.mac_key);
+				// Do three more passes.
+				// Compare last 8 bytes.
+
+			unimplemented!();
+		}
+
 		let result = aes_cbc::decrypt_aes256_cbc_mode(&ciphertext.cipher_text, message_key.cipher_key, message_key.iv);
 		match (result){
 			Ok (r) => {
-				return Some(PlainText(r.into_boxed_slice()))
+				Some(PlainText(r.into_boxed_slice()))
 			},
 			Err (e) => None
 		}
