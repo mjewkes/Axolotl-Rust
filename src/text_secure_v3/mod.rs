@@ -6,7 +6,7 @@ use ::crypto_wrappers::hmac;
 
 pub struct TextSecureV3;
 
-pub struct IdentityKey;
+pub struct IdentityKey
 impl axolotl::DH for IdentityKey {
 	type Private = [u8;32];
 	type Public = [u8;32];
@@ -51,7 +51,7 @@ pub struct MessageKey{
 
 pub struct PlainText(Box<[u8]>);
 
-pub struct CipherTextAndVersion{
+pub struct CipherTextMacAndVersion{
 	cipher_text : Box<[u8]>,
 	mac : [u8;8],
 	version : u8,
@@ -66,7 +66,7 @@ impl axolotl::Axolotl for TextSecureV3{
 	type MessageKey = MessageKey;
 
 	type PlainText = PlainText;
-	type CipherText = CipherTextAndVersion;
+	type CipherText = CipherTextMacAndVersion;
 
 
 	fn kdf_initial(ab0 : &<Self::IdentityKey as DH>::Shared, a0b : &<Self::IdentityKey as DH>::Shared, a0b0 : &<Self::IdentityKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey){
@@ -80,11 +80,29 @@ impl axolotl::Axolotl for TextSecureV3{
 	fn kdf_message(chain_key : &Self::ChainKey) -> (Self::ChainKey, Self::MessageKey){
 		unimplemented!();
 	}
+	
+	fn encode_message(message_key : &Self::MessageKey, 
+		              identity_key_local : &<Self::IdentityKey as DH>::Private, 
+		              plaintext : &Self::PlainText) 
+	                  -> Self::CipherText{
 
-	fn encode_message(message_key : &Self::MessageKey, identity_key_local : &<Self::IdentityKey as DH>::Private, plaintext : &Self::PlainText) -> Self::CipherText{
+		let PlainText(ref text) = *plaintext;
+		let cipher_data_result = aes_cbc::encrypt_aes256_cbc_mode(text,message_key.cipher_key, message_key.iv);
+		
+		let cipher_text_out = CipherText{
+			version=3,
+			cipher_text=cipher_data_result.unwrap(),
+
+		}
+
 		unimplemented!();
 	}
-	fn decode_message(message_key : &Self::MessageKey, identity_key_remote : &<Self::IdentityKey as DH>::Public, ciphertext : &Self::CipherText) -> Option<Self::PlainText>{
+	fn mac_from_keys_and_bytes (cipher_text_bytes : &[u8], 
+	fn decode_message(message_key : &Self::MessageKey, 
+		              identity_key_remote : &<Self::IdentityKey as DH>::Public, 
+		              ciphertext : &Self::CipherText) 
+	                  -> Option<Self::PlainText>{
+
 		if ciphertext.version != 3{
 			return None;
 		}
@@ -121,7 +139,7 @@ impl axolotl::Axolotl for TextSecureV3{
 	}
 	fn chain_message_limit() -> u32
 	{
-		unimplemented!();
+		2000
 	}
 
 	fn skipped_chain_limit() -> usize{
