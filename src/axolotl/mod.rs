@@ -1,7 +1,6 @@
 
 use std::option::{Option};
 use std::vec::{Vec};
-//use core::clone::{Clone};
 
 pub trait Axolotl {
 	type IdentityKey : DH;
@@ -16,11 +15,22 @@ pub trait Axolotl {
 
 
 	fn kdf_initial(ab0 : &<Self::IdentityKey as DH>::Shared, a0b : &<Self::IdentityKey as DH>::Shared, a0b0 : &<Self::IdentityKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey);
-	fn kdf_ratchet(root_key : Self::RootKey, ratchet : <Self::RatchetKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey);
+	fn kdf_ratchet(root_key : Self::RootKey, ratchet : &<Self::RatchetKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey);
 	fn kdf_message(chain_key : &Self::ChainKey) -> (Self::ChainKey, Self::MessageKey);
 
-	fn encode_message(message_key : &Self::MessageKey, identity_key_local : &<Self::IdentityKey as DH>::Private, plaintext : &Self::PlainText) -> Self::CipherText;
-	fn decode_message(message_key : &Self::MessageKey, identity_key_remote : &<Self::IdentityKey as DH>::Public, cyphertext : &Self::CipherText) -> Option<Self::PlainText>;
+	fn encode_message(
+		message_key : &Self::MessageKey, 
+		identity_key_local : &<Self::IdentityKey as DH>::Public,
+		identity_key_remote : &<Self::IdentityKey as DH>::Public, 
+		plaintext : &Self::PlainText) 
+		-> Self::CipherText;
+
+	fn decode_message(
+		message_key : &Self::MessageKey,
+		identity_key_local : &<Self::IdentityKey as DH>::Public,
+		identity_key_remote : &<Self::IdentityKey as DH>::Public, 
+		cyphertext : &Self::CipherText) 
+		-> Option<Self::PlainText>;
 
 	fn ratchet_keys_are_equal(key0 : &<Self::RatchetKey as DH>::Public, key1 : &<Self::RatchetKey as DH>::Public) -> bool;
 	fn generate_ratchet_key_pair() -> DHKeyPair<Self::RatchetKey>;
@@ -29,6 +39,54 @@ pub trait Axolotl {
 	fn chain_message_limit() -> u32;
 
 	fn skipped_chain_limit() -> usize;
+}
+
+fn three_dh<T>(identity_keys : &DHExchangedPair<T::IdentityKey>, handshake_keys : &DHExchangedPair<T::IdentityKey>)
+	-> (T::RootKey, T::ChainKey)
+	where T:Axolotl {
+		let ab0 = <T::IdentityKey as DH>::shared(&identity_keys.mine, &handshake_keys.theirs);
+		let a0b = <T::IdentityKey as DH>::shared(&handshake_keys.mine, &identity_keys.theirs);
+		let a0b0 = <T::IdentityKey as DH>::shared(&handshake_keys.mine, &handshake_keys.theirs);
+		T::kdf_initial(&ab0, &a0b, &a0b0)
+}
+
+pub fn init_as_alice<T>(identity_keys : &DHExchangedPair<T::IdentityKey>, handshake_keys : &DHExchangedPair<T::IdentityKey>, initial_ratchet_key : &<T::RatchetKey as DH>::Public) 
+	-> AxolotlState<T> 
+	where T:Axolotl {
+		let (pre_root_key, chain_key_recv) = three_dh::<T>(identity_keys, handshake_keys);
+		let ratchet_key = T::generate_ratchet_key_pair();
+		let ratchet_key_shared = <T::RatchetKey as DH>::shared(&ratchet_key.key, initial_ratchet_key);
+		let (root_key,chain_key_send) = T::kdf_ratchet(pre_root_key, &ratchet_key_shared);
+		let initial_receive_chain = ReceiveChain {
+			chain_key : chain_key_recv,
+			chain_key_index : 0,
+			ratchet_key : initial_ratchet_key.clone(),
+			message_keys : Vec::new(),
+		};
+		AxolotlState {
+			root_key : root_key,
+			identity_key_local : <T::IdentityKey as DH>::public(&identity_keys.mine),
+			identity_key_remote : identity_keys.theirs.clone(),
+			message_number_send : 0,
+			chain_key_send : chain_key_send,
+			ratchet_key_send : ratchet_key,
+			receive_chains : vec![initial_receive_chain],
+		}
+}
+
+pub fn init_as_bob<T>(identity_keys : &DHExchangedPair<T::IdentityKey>, handshake_keys : &DHExchangedPair<T::IdentityKey>, initial_ratchet_key : DHKeyPair<T::RatchetKey>) 
+	-> AxolotlState<T> 
+	where T:Axolotl {
+		let (root_key, chain_key_send) = three_dh::<T>(identity_keys, handshake_keys);
+		AxolotlState {
+			root_key : root_key,
+			identity_key_local : <T::IdentityKey as DH>::public(&identity_keys.mine),
+			identity_key_remote : identity_keys.theirs.clone(),
+			message_number_send : 0,
+			chain_key_send : chain_key_send,
+			ratchet_key_send : initial_ratchet_key,
+			receive_chains : Vec::new(),
+		}
 }
 
 pub trait DH {
@@ -62,7 +120,7 @@ pub struct DHExchangedPair<T> where T:DH {
 
 pub struct AxolotlState<T> where T:Axolotl {
 	pub root_key : T::RootKey,
-	pub identity_key_local  : <T::IdentityKey as DH>::Private,
+	pub identity_key_local  : <T::IdentityKey as DH>::Public,
 	pub identity_key_remote : <T::IdentityKey as DH>::Public,
 	pub message_number_send : u32,
 
@@ -152,7 +210,7 @@ impl <T:Axolotl> AxolotlState<T> {
 
 	fn try_encrypt(&mut self, plaintext : &T::PlainText) -> (AxolotlHeader<T>, T::CipherText) {
 		let (new_chain_key, message_key) = T::kdf_message(&self.chain_key_send);
-		let ciphertext = T::encode_message(&message_key, &self.identity_key_local, plaintext);
+		let ciphertext = T::encode_message(&message_key, &self.identity_key_local, &self.identity_key_remote, plaintext);
 
 		let header = AxolotlHeader {
 			message_number : self.message_number_send,
@@ -186,7 +244,7 @@ impl <T:Axolotl> AxolotlState<T> {
 		}
 		let message_key = message_key_or_none.unwrap();
 
-		T::decode_message(&message_key, &self.identity_key_remote, ciphertext)
+		T::decode_message(&message_key, &self.identity_key_local, &self.identity_key_remote, ciphertext)
 	}
 
 	fn get_or_create_receive_chain(&mut self, ratchet_key_theirs : &<T::RatchetKey as DH>::Public) -> &mut ReceiveChain<T> {
@@ -201,10 +259,10 @@ impl <T:Axolotl> AxolotlState<T> {
 			}
 			None => {
 				let ratchet_key_shared = <T::RatchetKey as DH>::shared(&self.ratchet_key_send.key, &ratchet_key_theirs);
-				let (receiver_root_key, receiver_chain_key) = T::kdf_ratchet(self.root_key.clone(), ratchet_key_shared);
+				let (receiver_root_key, receiver_chain_key) = T::kdf_ratchet(self.root_key.clone(), &ratchet_key_shared);
 				let new_ratchet_key_send = T::generate_ratchet_key_pair();
 				let new_ratchet_key_shared = <T::RatchetKey as DH>::shared(&new_ratchet_key_send.key, &ratchet_key_theirs);
-				let (root_key, chain_key_send) = T::kdf_ratchet(receiver_root_key, new_ratchet_key_shared);
+				let (root_key, chain_key_send) = T::kdf_ratchet(receiver_root_key, &new_ratchet_key_shared);
 		
 				let new_receive_chain = ReceiveChain {
 					chain_key : receiver_chain_key,
