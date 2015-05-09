@@ -5,7 +5,8 @@ use ::crypto_wrappers::aes_cbc;
 use ::crypto_wrappers::hmac;
 
 pub struct TextSecureV3;
-pub struct IdentityKey;
+
+pub struct IdentityKey
 
 impl axolotl::DH for IdentityKey {
 	type Private = [u8;32];
@@ -67,6 +68,7 @@ impl axolotl::Axolotl for TextSecureV3{
 	type PlainText = PlainText;
 	type CipherText = CipherTextMacAndVersion;
 
+
 	fn kdf_initial(ab0 : &<Self::IdentityKey as DH>::Shared, a0b : &<Self::IdentityKey as DH>::Shared, a0b0 : &<Self::IdentityKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey){
 		unimplemented!();
 	}
@@ -89,6 +91,11 @@ impl axolotl::Axolotl for TextSecureV3{
 		
 		 //
 		let mac = [0_u8;8];
+		let cipher_text_out = CipherText{
+			version=3,
+			cipher_text=cipher_data_result.unwrap(),
+
+		}
 		unimplemented!();
 		//
 		
