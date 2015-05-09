@@ -5,9 +5,13 @@ use ::crypto_wrappers::aes_cbc;
 use ::crypto_wrappers::hmac;
 
 pub struct TextSecureV3;
+pub struct IdentityKey;
 
+<<<<<<< HEAD
 pub struct IdentityKey
 
+=======
+>>>>>>> 5999fc2... partial move to double public identity macs
 impl axolotl::DH for IdentityKey {
 	type Private = [u8;32];
 	type Public = [u8;32];
@@ -106,6 +110,12 @@ impl axolotl::Axolotl for TextSecureV3{
 		};
 
 	}
+	// fn mac_from_keys_and_bytes (cipher_text_bytes : &[u8],
+	//                             sender_public_key : &<Self::IdentityKey as DH>::Public,
+	//                             receiver_public_key : &<Self::IdentityKey as DH>::Public,
+	//                             )-> &[u8]{
+
+	// }
 	fn decode_message(message_key : &Self::MessageKey, 
 		              identity_key_remote : &<Self::IdentityKey as DH>::Public, 
 		              ciphertext : &Self::CipherText) 
