@@ -5,8 +5,8 @@ use ::crypto_wrappers::aes_cbc;
 use ::crypto_wrappers::hmac;
 
 pub struct TextSecureV3;
+pub struct IdentityKey;
 
-pub struct IdentityKey
 impl axolotl::DH for IdentityKey {
 	type Private = [u8;32];
 	type Public = [u8;32];
@@ -18,7 +18,6 @@ impl axolotl::DH for IdentityKey {
 	fn shared(mine : &Self::Private, theirs : &Self::Public) -> Self::Shared{
 		unimplemented!();
 	}
-
 }
 
 pub struct RatchetKey;
@@ -89,15 +88,24 @@ impl axolotl::Axolotl for TextSecureV3{
 		let PlainText(ref text) = *plaintext;
 		let cipher_data_result = aes_cbc::encrypt_aes256_cbc_mode(text,message_key.cipher_key, message_key.iv);
 		
-		let cipher_text_out = CipherText{
-			version=3,
-			cipher_text=cipher_data_result.unwrap(),
-
-		}
-
+		 //
+		let mac = [0,0,0,0,0,0,0,0]; 
 		unimplemented!();
+		//
+		
+		let cipher_text_out = CipherTextMacAndVersion {
+			version : 3,
+			cipher_text : cipher_data_result.unwrap().into_boxed_slice(),
+			mac : mac,
+		};
+
 	}
-	fn mac_from_keys_and_bytes (cipher_text_bytes : &[u8], 
+	// fn mac_from_keys_and_bytes (cipher_text_bytes : &[u8],
+	//                             sender_public_key : &<Self::IdentityKey as DH>::Public,
+	//                             receiver_public_key : &<Self::IdentityKey as DH>::Public,
+	//                             )-> &[u8]{
+
+	// }
 	fn decode_message(message_key : &Self::MessageKey, 
 		              identity_key_remote : &<Self::IdentityKey as DH>::Public, 
 		              ciphertext : &Self::CipherText) 
