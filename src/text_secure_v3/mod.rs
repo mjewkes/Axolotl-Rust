@@ -89,7 +89,7 @@ impl axolotl::Axolotl for TextSecureV3{
 		let cipher_data_result = aes_cbc::encrypt_aes256_cbc_mode(text,message_key.cipher_key, message_key.iv);
 		
 		 //
-		let mac = [0,0,0,0,0,0,0,0]; 
+		let mac = [0_u8;8];
 		unimplemented!();
 		//
 		
@@ -100,30 +100,32 @@ impl axolotl::Axolotl for TextSecureV3{
 		};
 
 	}
-	// fn mac_from_keys_and_bytes (cipher_text_bytes : &[u8],
-	//                             sender_public_key : &<Self::IdentityKey as DH>::Public,
-	//                             receiver_public_key : &<Self::IdentityKey as DH>::Public,
-	//                             )-> &[u8]{
-
-	// }
 	fn decode_message(message_key : &Self::MessageKey, 
 		              identity_key_remote : &<Self::IdentityKey as DH>::Public, 
 		              ciphertext : &Self::CipherText) 
 	                  -> Option<Self::PlainText>{
 
-		if ciphertext.version != 3{
-			return None;
+      	{
+			if ciphertext.version != 3{
+				return None;
+			}
 		}
 		{
-			//HMAC
+			//HMAC - this is not correct.
+			unimplemented!();
 			let ref data = ciphertext.cipher_text;
 			let their_mac = ciphertext.mac;
-			let our_mac = 
-				hmac::hmac_sha256(&data,&message_key.mac_key);
-				// Do three more passes.
-				// Compare last 8 bytes.
+			let mut mac_context=
+				hmac::HmacSha256::new(&message_key.mac_key);
+			mac_context.input(identity_key_remote);
+			mac_context.input(data);
 
-			unimplemented!();
+			let mac_result = mac_context.result();
+			let mac_data = mac_result.code();
+			let first_8_bytes = &mac_data[0..8];
+			if first_8_bytes != ciphertext.mac {
+				return None;
+			}
 		}
 
 		let result = aes_cbc::decrypt_aes256_cbc_mode(&ciphertext.cipher_text, message_key.cipher_key, message_key.iv);
