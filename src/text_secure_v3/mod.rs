@@ -100,6 +100,12 @@ impl axolotl::Axolotl for TextSecureV3{
 		};
 
 	}
+	// fn mac_from_keys_and_bytes (cipher_text_bytes : &[u8],
+	//                             sender_public_key : &<Self::IdentityKey as DH>::Public,
+	//                             receiver_public_key : &<Self::IdentityKey as DH>::Public,
+	//                             )-> &[u8]{
+
+	// }
 	fn decode_message(message_key : &Self::MessageKey, 
 		              identity_key_remote : &<Self::IdentityKey as DH>::Public, 
 		              ciphertext : &Self::CipherText) 
@@ -118,6 +124,7 @@ impl axolotl::Axolotl for TextSecureV3{
 			let mut mac_context=
 				hmac::HmacSha256::new(&message_key.mac_key);
 			mac_context.input(identity_key_remote);
+			//local key needed as well
 			mac_context.input(data);
 
 			let mac_result = mac_context.result();
