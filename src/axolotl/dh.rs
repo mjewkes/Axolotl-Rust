@@ -7,6 +7,7 @@ pub trait DH {
 	fn shared(mine : &Self::Private, theirs : &Self::Public) -> Self::Shared;
 }
 
+//these types are to avoid "<T::SomeKey as DH>::Private", replacing it with "DHPrivate<T::SomeKey>"
 pub type DHPrivate<T> where T:DH = T::Private;
 pub type DHPublic<T> where T:DH = T::Public;
 pub type DHShared<T> where T:DH = T::Shared;
