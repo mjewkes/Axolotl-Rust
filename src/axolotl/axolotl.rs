@@ -1,6 +1,6 @@
 
 use std::option::{Option};
-use super::dh::{DH,DHKeyPair};
+use super::dh::{DH,DHKeyPair,DHShared,DHPublic};
 
 pub trait Axolotl {
 	type IdentityKey : DH;
@@ -14,7 +14,7 @@ pub trait Axolotl {
 	type CipherText;
 
 
-	fn kdf_initial(ab0 : &<Self::IdentityKey as DH>::Shared, a0b : &<Self::IdentityKey as DH>::Shared, a0b0 : &<Self::IdentityKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey);
+	fn kdf_initial(ab0 : &DHShared<Self::IdentityKey>, a0b : &DHShared<Self::IdentityKey>, a0b0 : &DHShared<Self::IdentityKey>) -> (Self::RootKey, Self::ChainKey);
 
 	// This is the DH future secrecy ratchet/
 	fn kdf_ratchet(root_key : Self::RootKey, ratchet : &<Self::RatchetKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey);
@@ -24,19 +24,19 @@ pub trait Axolotl {
 
 	fn encode_message(
 		message_key : &Self::MessageKey, 
-		identity_key_local : &<Self::IdentityKey as DH>::Public,
-		identity_key_remote : &<Self::IdentityKey as DH>::Public, 
+		identity_key_local : &DHPublic<Self::IdentityKey>,
+		identity_key_remote : &DHPublic<Self::IdentityKey>, 
 		plaintext : &Self::PlainText) 
 		-> Self::CipherText;
 
 	fn decode_message(
 		message_key : &Self::MessageKey,
-		identity_key_local : &<Self::IdentityKey as DH>::Public,
-		identity_key_remote : &<Self::IdentityKey as DH>::Public, 
+		identity_key_local : &DHPublic<Self::IdentityKey>,
+		identity_key_remote : &DHPublic<Self::IdentityKey>, 
 		cyphertext : &Self::CipherText) 
 		-> Option<Self::PlainText>;
 
-	fn ratchet_keys_are_equal(key0 : &<Self::RatchetKey as DH>::Public, key1 : &<Self::RatchetKey as DH>::Public) -> bool;
+	fn ratchet_keys_are_equal(key0 : &DHPublic<Self::RatchetKey>, key1 : &DHPublic<Self::RatchetKey>) -> bool;
 	fn generate_ratchet_key_pair() -> DHKeyPair<Self::RatchetKey>;
 
 	fn future_message_limit() -> u32;

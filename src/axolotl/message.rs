@@ -1,8 +1,8 @@
 use super::axolotl::{Axolotl};
-use super::dh::{DH};
+use super::dh::{DHPublic};
 
 pub struct AxolotlMessage<T> where T:Axolotl {
 	pub message_number : u32,
-	pub ratchet_key : <T::RatchetKey as DH>::Public,
+	pub ratchet_key : DHPublic<T::RatchetKey>,
 	pub ciphertext : T::CipherText,
 }

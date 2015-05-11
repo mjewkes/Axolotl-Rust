@@ -7,6 +7,9 @@ pub trait DH {
 	fn shared(mine : &Self::Private, theirs : &Self::Public) -> Self::Shared;
 }
 
+pub type DHPrivate<T> where T:DH = T::Private;
+pub type DHPublic<T> where T:DH = T::Public;
+pub type DHShared<T> where T:DH = T::Shared;
 
 pub struct DHKeyPair<T> where T:DH {
 	pub key : T::Private,

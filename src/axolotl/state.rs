@@ -1,11 +1,11 @@
-use super::dh::{DH,DHKeyPair,DHExchangedPair};
+use super::dh::{DH,DHKeyPair,DHExchangedPair,DHPublic};
 use super::axolotl::{Axolotl};
 use super::message::{AxolotlMessage};
 
 pub struct AxolotlState<T> where T:Axolotl {
 	root_key : T::RootKey,
-	identity_key_local  : <T::IdentityKey as DH>::Public,
-	identity_key_remote : <T::IdentityKey as DH>::Public,
+	identity_key_local  : DHPublic<T::IdentityKey>,
+	identity_key_remote : DHPublic<T::IdentityKey>,
 	message_number_send : u32,
 
 	chain_key_send : T::ChainKey,
@@ -17,7 +17,7 @@ pub struct AxolotlState<T> where T:Axolotl {
 struct ReceiveChain<T> where T:Axolotl {
 	chain_key : T::ChainKey,
 	chain_key_index : u32,
-	ratchet_key : <T::RatchetKey as DH>::Public,
+	ratchet_key : DHPublic<T::RatchetKey>,
 	message_keys : Vec<(u32,T::MessageKey)>,
 }
 
@@ -53,7 +53,7 @@ fn three_dh_kdf<T>(identity_keys : &DHExchangedPair<T::IdentityKey>, handshake_k
 	let a0b0 = <T::IdentityKey as DH>::shared(&handshake_keys.mine, &handshake_keys.theirs);
 	T::kdf_initial(&ab0, &a0b, &a0b0)
 }
-pub fn init_as_alice<T>(identity_keys : &DHExchangedPair<T::IdentityKey>, handshake_keys : &DHExchangedPair<T::IdentityKey>, initial_ratchet_key : &<T::RatchetKey as DH>::Public) 
+pub fn init_as_alice<T>(identity_keys : &DHExchangedPair<T::IdentityKey>, handshake_keys : &DHExchangedPair<T::IdentityKey>, initial_ratchet_key : &DHPublic<T::RatchetKey>) 
 	-> AxolotlState<T> 
 	where T:Axolotl {
 		let (pre_root_key, chain_key_recv) = three_dh_kdf::<T>(identity_keys, handshake_keys);
