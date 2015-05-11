@@ -1,17 +1,15 @@
 use ::axolotl;
-use ::axolotl::DH;
-use ::axolotl::DHKeyPair;
+use ::axolotl::{DH,DHKeyPair};
 use ::crypto_wrappers::aes_cbc;
 use ::crypto_wrappers::hmac;
 
-pub struct TextSecureV3;
+pub struct TextSecureV3{
+
+	my_identity_key : axolotl::dh::DHPublic<IdentityKey>,
+	their_identity_key : axolotl::dh::DHPublic<IdentityKey>,
+}
 pub struct IdentityKey;
 
-<<<<<<< HEAD
-pub struct IdentityKey
-
-=======
->>>>>>> 5999fc2... partial move to double public identity macs
 impl axolotl::DH for IdentityKey {
 	type Private = [u8;32];
 	type Public = [u8;32];
@@ -77,7 +75,7 @@ impl axolotl::Axolotl for TextSecureV3{
 		unimplemented!();
 	}
 
-	fn kdf_ratchet(root_key : Self::RootKey, ratchet : <Self::RatchetKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey){
+	fn kdf_ratchet(root_key : Self::RootKey, ratchet : &<Self::RatchetKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey){
 		unimplemented!();
 	}
 
@@ -86,7 +84,6 @@ impl axolotl::Axolotl for TextSecureV3{
 	}
 	
 	fn encode_message(message_key : &Self::MessageKey, 
-		              identity_key_local : &<Self::IdentityKey as DH>::Private, 
 		              plaintext : &Self::PlainText) 
 	                  -> Self::CipherText{
 
@@ -117,7 +114,6 @@ impl axolotl::Axolotl for TextSecureV3{
 
 	// }
 	fn decode_message(message_key : &Self::MessageKey, 
-		              identity_key_remote : &<Self::IdentityKey as DH>::Public, 
 		              ciphertext : &Self::CipherText) 
 	                  -> Option<Self::PlainText>{
 
