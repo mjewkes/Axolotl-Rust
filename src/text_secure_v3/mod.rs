@@ -4,37 +4,58 @@ use ::crypto_wrappers::aes_cbc;
 use ::crypto_wrappers::hmac;
 
 pub struct TextSecureV3{
+    my_identity_key : axolotl::DHPublic<IdentityKey>,
+    their_identity_key : axolotl::DHPublic<IdentityKey>,
+}
+impl TextSecureV3{
+    pub fn new(my_identity_key : axolotl::DHPublic<IdentityKey>, 
+               their_identity_key : axolotl::DHPublic<IdentityKey>,) 
+               -> TextSecureV3{
+        TextSecureV3{my_identity_key : my_identity_key, their_identity_key: their_identity_key}
+    } 
+    fn match_mac_from_keys_and_bytes_to_truncated_mac (serialized_message_bytes : &[u8],
+                                          mac_key : [u8;32],
+                                          sender_public_key : &axolotl::DHPublic<IdentityKey>,
+                                          receiver_public_key : &axolotl::DHPublic<IdentityKey>,
+                                          truncated_mac : [u8;8])
+                                          -> bool{
+        let mut mac_context= hmac::HmacSha256::new(&mac_key);
+        mac_context.input(sender_public_key);
+        mac_context.input(receiver_public_key);
+        mac_context.input(serialized_message_bytes);
+        let mac_result = mac_context.result();
+        let bytes = &mac_result.code()[0..8];
+        bytes == truncated_mac
+    }
 
-	my_identity_key : axolotl::dh::DHPublic<IdentityKey>,
-	their_identity_key : axolotl::dh::DHPublic<IdentityKey>,
 }
 pub struct IdentityKey;
 
 impl axolotl::DH for IdentityKey {
-	type Private = [u8;32];
-	type Public = [u8;32];
-	type Shared = [u8;32];
+    type Private = [u8;32];
+    type Public = [u8;32];
+    type Shared = [u8;32];
 
-	fn public(key : &Self::Private) -> Self::Public{
-		unimplemented!();
-	}
-	fn shared(mine : &Self::Private, theirs : &Self::Public) -> Self::Shared{
-		unimplemented!();
-	}
+    fn public(key : &Self::Private) -> Self::Public{
+        unimplemented!();
+    }
+    fn shared(mine : &Self::Private, theirs : &Self::Public) -> Self::Shared{
+        unimplemented!();
+    }
 }
 
 pub struct RatchetKey;
 impl axolotl::DH for RatchetKey {
-	type Private = [u8;32];
-	type Public = [u8;32];
-	type Shared = [u8;32];
+    type Private = [u8;32];
+    type Public = [u8;32];
+    type Shared = [u8;32];
 
-	fn public(key : &Self::Private) -> Self::Public{
-		unimplemented!();
-	}
-	fn shared(mine : &Self::Private, theirs : &Self::Public) -> Self::Shared{
-		unimplemented!();
-	}
+    fn public(key : &Self::Private) -> Self::Public{
+        unimplemented!();
+    }
+    fn shared(mine : &Self::Private, theirs : &Self::Public) -> Self::Shared{
+        unimplemented!();
+    }
 
 }
 
@@ -46,17 +67,17 @@ pub struct ChainKey ([u8;32]);
 
 #[derive(Clone)]
 pub struct MessageKey{
-	cipher_key : [u8;32],
-	mac_key : [u8;32],
-	iv : [u8;16],
+    cipher_key : [u8;32],
+    mac_key : [u8;32],
+    iv : [u8;16],
 }
 
 pub struct PlainText(Box<[u8]>);
 
 pub struct CipherTextMacAndVersion{
-	cipher_text : Box<[u8]>,
-	mac : [u8;8],
-	version : u8,
+    cipher_text : Box<[u8]>,
+    mac : [u8;8],
+    version : u8,
 }
 
 impl axolotl::Axolotl for TextSecureV3{
