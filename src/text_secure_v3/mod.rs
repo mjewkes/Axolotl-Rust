@@ -1,10 +1,13 @@
 use ::axolotl;
-use ::axolotl::DH;
-use ::axolotl::DHKeyPair;
+use ::axolotl::{DH,DHKeyPair};
 use ::crypto_wrappers::aes_cbc;
 use ::crypto_wrappers::hmac;
 
-pub struct TextSecureV3;
+pub struct TextSecureV3{
+
+	my_identity_key : axolotl::dh::DHPublic<IdentityKey>,
+	their_identity_key : axolotl::dh::DHPublic<IdentityKey>,
+}
 pub struct IdentityKey;
 
 impl axolotl::DH for IdentityKey {
@@ -72,7 +75,7 @@ impl axolotl::Axolotl for TextSecureV3{
 		unimplemented!();
 	}
 
-	fn kdf_ratchet(root_key : Self::RootKey, ratchet : <Self::RatchetKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey){
+	fn kdf_ratchet(root_key : Self::RootKey, ratchet : &<Self::RatchetKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey){
 		unimplemented!();
 	}
 
@@ -81,7 +84,6 @@ impl axolotl::Axolotl for TextSecureV3{
 	}
 	
 	fn encode_message(message_key : &Self::MessageKey, 
-		              identity_key_local : &<Self::IdentityKey as DH>::Private, 
 		              plaintext : &Self::PlainText) 
 	                  -> Self::CipherText{
 
@@ -107,7 +109,6 @@ impl axolotl::Axolotl for TextSecureV3{
 
 	// }
 	fn decode_message(message_key : &Self::MessageKey, 
-		              identity_key_remote : &<Self::IdentityKey as DH>::Public, 
 		              ciphertext : &Self::CipherText) 
 	                  -> Option<Self::PlainText>{
 
@@ -123,7 +124,7 @@ impl axolotl::Axolotl for TextSecureV3{
 			let their_mac = ciphertext.mac;
 			let mut mac_context=
 				hmac::HmacSha256::new(&message_key.mac_key);
-			mac_context.input(identity_key_remote);
+			// mac_context.input(identity_key_remote);
 			//local key needed as well
 			mac_context.input(data);
 
