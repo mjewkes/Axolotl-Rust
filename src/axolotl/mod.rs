@@ -1,9 +1,9 @@
-mod dh;
 mod axolotl;
-mod state;
+mod dh;
 mod message;
+mod state;
 
 pub use self::axolotl::{Axolotl};
-pub use self::dh::{DH,DHKeyPair,DHExchangedPair};
-pub use self::state::{AxolotlState,init_as_alice,init_as_bob};
+pub use self::dh::{DH,DHExchangedPair,DHKeyPair};
 pub use self::message::{AxolotlMessage};
+pub use self::state::{AxolotlState,init_as_alice,init_as_bob};

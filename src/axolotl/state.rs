@@ -1,5 +1,5 @@
-use super::dh::{DH,DHKeyPair,DHExchangedPair,DHPublic};
 use super::axolotl::{Axolotl};
+use super::dh::{DH,DHExchangedPair,DHKeyPair,DHPublic};
 use super::message::{AxolotlMessage};
 
 pub struct AxolotlState<T> where T:Axolotl {
@@ -135,7 +135,7 @@ impl <T:Axolotl> AxolotlState<T> {
 
 	fn try_encrypt(&mut self, plaintext : &T::PlainText) -> AxolotlMessage<T> {
 		let (new_chain_key, message_key) = T::kdf_message(&self.chain_key_send);
-		let ciphertext = T::encode_message(&message_key, &self.identity_key_local, &self.identity_key_remote, plaintext);
+		let ciphertext = T::encode_message(&message_key, plaintext);
 
 		let message = AxolotlMessage {
 			message_number : self.message_number_send,
@@ -170,7 +170,7 @@ impl <T:Axolotl> AxolotlState<T> {
 		}
 		let message_key = message_key_or_none.unwrap();
 
-		T::decode_message(&message_key, &self.identity_key_local, &self.identity_key_remote, &message.ciphertext)
+		T::decode_message(&message_key, &message.ciphertext)
 	}
 
 	fn get_or_create_receive_chain(&mut self, ratchet_key_theirs : &<T::RatchetKey as DH>::Public) -> &mut ReceiveChain<T> {

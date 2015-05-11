@@ -1,5 +1,5 @@
-
 use std::option::{Option};
+
 use super::dh::{DH,DHKeyPair,DHShared,DHPublic};
 
 pub trait Axolotl {
@@ -23,16 +23,12 @@ pub trait Axolotl {
 	fn kdf_message(chain_key : &Self::ChainKey) -> (Self::ChainKey, Self::MessageKey);
 
 	fn encode_message(
-		message_key : &Self::MessageKey, 
-		identity_key_local : &DHPublic<Self::IdentityKey>,
-		identity_key_remote : &DHPublic<Self::IdentityKey>, 
+		message_key : &Self::MessageKey,
 		plaintext : &Self::PlainText) 
 		-> Self::CipherText;
 
 	fn decode_message(
 		message_key : &Self::MessageKey,
-		identity_key_local : &DHPublic<Self::IdentityKey>,
-		identity_key_remote : &DHPublic<Self::IdentityKey>, 
 		cyphertext : &Self::CipherText) 
 		-> Option<Self::PlainText>;
 
