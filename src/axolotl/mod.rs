@@ -15,7 +15,11 @@ pub trait Axolotl {
 
 
 	fn kdf_initial(ab0 : &<Self::IdentityKey as DH>::Shared, a0b : &<Self::IdentityKey as DH>::Shared, a0b0 : &<Self::IdentityKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey);
+
+	// This is the DH future secrecy ratchet/
 	fn kdf_ratchet(root_key : Self::RootKey, ratchet : &<Self::RatchetKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey);
+
+	//This is the SCIMP style forward secrecy chain key iteration.
 	fn kdf_message(chain_key : &Self::ChainKey) -> (Self::ChainKey, Self::MessageKey);
 
 	fn encode_message(
@@ -248,7 +252,7 @@ impl <T:Axolotl> AxolotlState<T> {
 	}
 
 	fn get_or_create_receive_chain(&mut self, ratchet_key_theirs : &<T::RatchetKey as DH>::Public) -> &mut ReceiveChain<T> {
-		//TODO: comment on why this is, for loop early return	breaks borrowing
+		//TODO: comment on why this is, for loop early return breaks borrowing
 		let receive_chain_position =  self.receive_chains.iter().position(
 			| &ReceiveChain{ref ratchet_key, ..} | T::ratchet_keys_are_equal(ratchet_key, &ratchet_key_theirs)
 			);
