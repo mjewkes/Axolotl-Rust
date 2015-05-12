@@ -25,7 +25,7 @@ fn invoke_curve25519_donna( a: &[u8;32],  b: &[u8;32]) -> [u8;32] {
     unsafe {
         curve25519_donna(&mut out[0],&a[0],&b[0]);
     }
-    return out;
+    out
 }
 
 pub fn derive_public_key( private_key: &PrivateKey) -> PublicKey {
@@ -33,10 +33,11 @@ pub fn derive_public_key( private_key: &PrivateKey) -> PublicKey {
     let ref basepoint : [u8;32] = [ 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
                                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
                                     0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ];
-    return PublicKey{val: invoke_curve25519_donna(private_key.key(),basepoint)};
+    PublicKey{val: invoke_curve25519_donna(&private_key.val,basepoint)}
 }
+
 pub fn derive_shared_key( private_key: &PrivateKey, remote_public_key : &PublicKey ) -> SharedKey {
-    return SharedKey{val: invoke_curve25519_donna(private_key.key(),remote_public_key.key())};
+    SharedKey{val: invoke_curve25519_donna(&private_key.val,remote_public_key.to_bytes())}
 }
 
 pub fn generate_private_key() -> PrivateKey{
@@ -49,19 +50,19 @@ pub fn generate_private_key() -> PrivateKey{
     private_key[31] &= 127;
     private_key[31] |= 64;
 
-    return PrivateKey{val: *private_key};
+    PrivateKey::from_bytes(*private_key)
 }
 
 pub struct PublicKey {
     val: [u8;PUB_KEY_LEN],
 }
 impl PublicKey {
-    pub fn new(bytes : [u8 ; PUB_KEY_LEN]) -> Self {
-        return PublicKey{val: bytes};
+    pub fn from_bytes(bytes : [u8 ; PUB_KEY_LEN]) -> Self {
+        PublicKey{val: bytes}
     }
     
-    pub fn key(&self) -> &[u8;PUB_KEY_LEN] {
-        return &self.val;
+    pub fn to_bytes(&self) -> &[u8;PUB_KEY_LEN] {
+        &self.val
     }
 }
 
@@ -69,12 +70,8 @@ pub struct PrivateKey {
     val: [u8;PRIV_KEY_LEN],
 }
 impl PrivateKey {
-    pub fn new(bytes : [u8 ; PRIV_KEY_LEN]) -> Self {
-        return PrivateKey{val: bytes};
-    }
-
-    pub fn key(&self) -> &[u8;PRIV_KEY_LEN] {
-        return &self.val;
+    fn from_bytes(bytes : [u8 ; SHARED_KEY_LEN]) -> Self {
+        PrivateKey{val: bytes}
     }
 }
 
@@ -82,12 +79,12 @@ pub struct SharedKey {
     val: [u8;SHARED_KEY_LEN],
 }
 impl SharedKey {
-    pub fn new(bytes : [u8 ; SHARED_KEY_LEN]) -> Self {
-        return SharedKey{val: bytes};
+    fn from_bytes(bytes : [u8 ; SHARED_KEY_LEN]) -> Self {
+        SharedKey{val: bytes}
     }
 
-    pub fn key(&self) -> &[u8;SHARED_KEY_LEN] {
-        return &self.val;
+    pub fn to_bytes(&self) -> &[u8;SHARED_KEY_LEN] {
+        &self.val
     }
 }
 
@@ -123,25 +120,23 @@ mod tests {
                                                         0x9a, 0x9c, 0x38, 0x06, 0xc1, 0xdd, 0x7c, 0xa4, 0xc4, 0x77, 
                                                         0xe6, 0x29];
 
-        let alice_pub  = PublicKey::new(alice_public_bytes);
-        let alice_priv = PrivateKey::new(alice_private_bytes);
+        let alice_pub  = PublicKey::from_bytes(alice_public_bytes);
+        let alice_priv = PrivateKey::from_bytes(alice_private_bytes);
 
-        let bob_pub  = PublicKey::new(bob_public_bytes);
-        let bob_priv = PrivateKey::new(bob_private_bytes);
+        let bob_pub  = PublicKey::from_bytes(bob_public_bytes);
+        let bob_priv = PrivateKey::from_bytes(bob_private_bytes);
 
-        let expected_shared = SharedKey::new(shared_bytes);
+        let expected_shared = SharedKey::from_bytes(shared_bytes);
 
         let alice_shared = derive_shared_key(&alice_priv,&bob_pub);
         let bob_shared   = derive_shared_key(&bob_priv,&alice_pub);
-
         
-        assert_eq!(alice_pub.key() , derive_public_key(&alice_priv).key());
-        assert_eq!(bob_pub.key() , derive_public_key(&bob_priv).key());
-        assert!(alice_pub.key() != derive_public_key(&bob_priv).key());
+        assert_eq!(alice_pub.to_bytes() , derive_public_key(&alice_priv).to_bytes());
+        assert_eq!(bob_pub.to_bytes() , derive_public_key(&bob_priv).to_bytes());
+        assert!(alice_pub.to_bytes() != derive_public_key(&bob_priv).to_bytes());
 
-
-        assert_eq!(alice_shared.key(),bob_shared.key());
-        assert_eq!(bob_shared.key(), expected_shared.key());
+        assert_eq!(alice_shared.to_bytes(),bob_shared.to_bytes());
+        assert_eq!(bob_shared.to_bytes(), expected_shared.to_bytes());
     }
 
     #[test]
@@ -155,7 +150,33 @@ mod tests {
         let alice_shared = derive_shared_key(&alice_priv,&bob_pub);
         let bob_shared   = derive_shared_key(&bob_priv,&alice_pub);
 
-        assert_eq!(alice_shared.key(), bob_shared.key());
+        assert_eq!(alice_shared.to_bytes(), bob_shared.to_bytes());
     }
 
+    fn to_pub(key: &SharedKey) -> PublicKey{
+        PublicKey{val: *key.to_bytes()}
+    }
+
+    const LOOP_ITERATIONS : u32 = 1000;
+    #[test]
+    fn loop_test(){
+        let mut e1 = [0x03, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00];
+        let mut e2 = [0x05, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00];
+        let mut k  = [0x09, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00];
+                
+        for __ in 0 .. LOOP_ITERATIONS {
+
+            let e1k   = derive_shared_key(&PrivateKey::from_bytes(e1),&PublicKey::from_bytes(k));
+            let e2e1k = derive_shared_key(&PrivateKey::from_bytes(e2),&to_pub(&e1k));
+            let e2k   = derive_shared_key(&PrivateKey::from_bytes(e2),&PublicKey::from_bytes(k));
+            let e1e2k = derive_shared_key(&PrivateKey::from_bytes(e1),&to_pub(&e2k));
+
+            assert_eq!(e1e2k.to_bytes(),e2e1k.to_bytes());
+            for x in 0..32 {
+                e1[x] = e1[x] ^ e2k.to_bytes()[x];
+                e2[x] = e2[x] ^ e1k.to_bytes()[x];
+                k[x]  = k[x]  ^ e1e2k.to_bytes()[x];
+            }
+        }
+    }
 }
