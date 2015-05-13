@@ -27,8 +27,16 @@ impl HmacSha256 {
     }
 }
 
-pub fn hmac_timing_safe_result(value : &[u8] ) -> MacResult {
-    return MacResult::new(value);
+pub fn hmac_compare_prefix(expected : MacResult, value : &[u8]) -> bool {
+    let expected_bytes = expected.code();
+    let value_len = value.len();
+    if expected_bytes.len() < value_len {
+        return false;
+    }
+
+    let expected_truncated = MacResult::new(&expected_bytes[..value_len]);
+    let value_mac = MacResult::new(value);
+    return expected_truncated == value_mac;
 }
 
 #[cfg(test)]
@@ -51,7 +59,7 @@ mod tests {
         hmac.input(&data);
         let r = hmac.result();
 
-        assert!(r == hmac_timing_safe_result(&expected));
+        assert!(hmac_compare_prefix(r,&expected));
     }
 
     #[test]
@@ -71,7 +79,7 @@ mod tests {
         hmac.input(&data);
         let r = hmac.result();
 
-        assert!(r == hmac_timing_safe_result(&expected));
+        assert!(hmac_compare_prefix(r, &expected));
     }
     #[test]
     fn hmac_sha256_rfc4231_3() {
@@ -93,6 +101,6 @@ mod tests {
         hmac.input(&data);
         let r = hmac.result();
 
-        assert!(r == hmac_timing_safe_result(&expected));
+        assert!(hmac_compare_prefix(r, &expected));
     }
 }
