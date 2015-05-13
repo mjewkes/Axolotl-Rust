@@ -1,5 +1,5 @@
 [package]
-name = "Axolotl-Rust"
+name = "raxolotl"
 version = "0.0.1"
 authors = ["harrison <notallama@gmail.com>"]
 links = "curve25519-donna"
