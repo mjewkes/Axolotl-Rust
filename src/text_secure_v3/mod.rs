@@ -74,9 +74,8 @@ pub struct MessageKey{
 
 pub struct PlainText(Box<[u8]>);
 
-pub struct CipherTextMacAndVersion{
+pub struct CipherTextAndVersion{
     cipher_text : Box<[u8]>,
-    mac : [u8;8],
     version : u8,
 }
 
@@ -89,7 +88,7 @@ impl axolotl::Axolotl for TextSecureV3{
     type MessageKey = MessageKey;
 
     type PlainText = PlainText;
-    type CipherText = CipherTextMacAndVersion;
+    type CipherText = CipherTextAndVersion;
 
     type Mac = ();
 
@@ -113,68 +112,24 @@ impl axolotl::Axolotl for TextSecureV3{
                       plaintext : &Self::PlainText) 
                       -> Self::CipherText{
 
-        // let PlainText(ref text) = *plaintext;
-        // let cipher_data_result = aes_cbc::encrypt_aes256_cbc_mode(text,message_key.cipher_key, message_key.iv);
+        let PlainText(ref text) = *plaintext;
+        let ciphertext = aes_cbc::encrypt_aes256_cbc_mode(text,message_key.cipher_key, message_key.iv);
         
-        //  //
-        // let mac = [0_u8;8];
-        // let cipher_text_out = CipherText{
-        //  version=3,
-        //  cipher_text=cipher_data_result.unwrap(),
-
-        // }
-        // unimplemented!();
-        // //
-        
-        // let cipher_text_out = CipherTextMacAndVersion {
-        //  version : 3,
-        //  cipher_text : cipher_data_result.unwrap().into_boxed_slice(),
-        //  mac : mac,
-        // };
-        unimplemented!();
-
+        CipherTextAndVersion {
+            version : 3,
+            cipher_text : ciphertext.into_boxed_slice(),
+        }
     }
-    // fn mac_from_keys_and_bytes (cipher_text_bytes : &[u8],
-    //                             sender_public_key : &<Self::IdentityKey as DH>::Public,
-    //                             receiver_public_key : &<Self::IdentityKey as DH>::Public,
-    //                             )-> &[u8]{
 
-    // }
     fn decrypt_message(message_key : &Self::MessageKey, 
                       ciphertext : &Self::CipherText) 
                       -> Option<Self::PlainText>{
+        if ciphertext.version != 3 {
+            return None;
+        }
 
-  //        {
-        //  if ciphertext.version != 3{
-        //      return None;
-        //  }
-        // }
-        // {
-        //  //HMAC - this is not correct.
-        //  unimplemented!();
-        //  let ref data = ciphertext.cipher_text;
-        //  let their_mac = ciphertext.mac;
-        //  let mut mac_context=
-        //      hmac::HmacSha256::new(&message_key.mac_key);
-        //  mac_context.input(identity_key_remote);
-        //  mac_context.input(data);
-
-        //  let mac_result = mac_context.result();
-        //  let mac_data = mac_result.code();
-        //  let first_8_bytes = &mac_data[0..8];
-        //  if first_8_bytes != ciphertext.mac {
-        //      return None;
-        //  }
-        // }
-
-        // let result = aes_cbc::decrypt_aes256_cbc_mode(&ciphertext.cipher_text, message_key.cipher_key, message_key.iv);
-        // match (result){
-        //  Ok (r) => {
-        //      Some(PlainText(r.into_boxed_slice()))
-        //  },
-        //  Err (e) => None
-        // }
-        unimplemented!();
+        let result = aes_cbc::decrypt_aes256_cbc_mode(&ciphertext.cipher_text, message_key.cipher_key, message_key.iv);
+        Some(PlainText(result.into_boxed_slice()))
     }
 
     fn authenticate_message(
