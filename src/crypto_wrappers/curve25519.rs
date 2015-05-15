@@ -53,6 +53,8 @@ pub fn generate_private_key() -> PrivateKey{
     PrivateKey::from_bytes(*private_key)
 }
 
+#[derive(Clone)]
+#[derive(PartialEq)]
 pub struct PublicKey {
     val: [u8;PUB_KEY_LEN],
 }
@@ -66,15 +68,20 @@ impl PublicKey {
     }
 }
 
+#[derive(Clone)]
 pub struct PrivateKey {
     val: [u8;PRIV_KEY_LEN],
 }
 impl PrivateKey {
-    fn from_bytes(bytes : [u8 ; SHARED_KEY_LEN]) -> Self {
+    pub fn from_bytes(bytes : [u8 ; PRIV_KEY_LEN]) -> Self {
         PrivateKey{val: bytes}
+    }
+    pub fn to_bytes(&self) -> &[u8;PRIV_KEY_LEN] {
+        &self.val
     }
 }
 
+#[derive(Clone)]
 pub struct SharedKey {
     val: [u8;SHARED_KEY_LEN],
 }
@@ -157,7 +164,7 @@ mod tests {
         PublicKey{val: *key.to_bytes()}
     }
 
-    const LOOP_ITERATIONS : u32 = 1000;
+    const LOOP_ITERATIONS : u32 = 10;
     #[test]
     fn loop_test(){
         let mut e1 = [0x03, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00];

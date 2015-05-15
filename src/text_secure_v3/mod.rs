@@ -1,10 +1,12 @@
 use ::axolotl;
-use ::axolotl::{AxolotlMessage,DH,DHKeyPair,DHPublic,DHShared};
+use ::axolotl::{AxolotlMessage,DH,DHKeyPair,DHPrivate,DHPublic,DHShared};
 use ::crypto_wrappers::aes_cbc;
+use ::crypto_wrappers::curve25519;
 use ::crypto_wrappers::hkdf;
 use ::crypto_wrappers::hmac;
 
 
+#[macro_export]
 macro_rules! to_array(
     ($arr:expr, $count:expr) => ( {
         let mut x : [u8;$count] = [0; $count];
@@ -15,6 +17,7 @@ macro_rules! to_array(
     });
 );
 
+const WHOLE_BUNCH   : u32   = !0 as u32;  // Compiler doesn't like u32::MAX interim fix
 const HMAC_LEN      : usize = 32;
 
 const KEY_LEN_CHAIN : usize = 32;
@@ -44,8 +47,8 @@ impl TextSecureV3{
                                           truncated_mac : [u8;8])
                                           -> bool{
         let mut mac_context= hmac::HmacSha256::new(&mac_key);
-        mac_context.input(sender_public_key);
-        mac_context.input(receiver_public_key);
+        mac_context.input(sender_public_key.to_bytes());
+        mac_context.input(receiver_public_key.to_bytes());
         mac_context.input(serialized_message_bytes);
         let mac_result = mac_context.result();
         let bytes = &mac_result.code()[0..8];
@@ -56,29 +59,33 @@ impl TextSecureV3{
 pub struct IdentityKey;
 
 impl axolotl::DH for IdentityKey {
-    type Private = [u8;32];
-    type Public = [u8;32];
-    type Shared = [u8;32];
+    type Private = curve25519::PrivateKey;
+    type Public  = curve25519::PublicKey;
+    type Shared  = curve25519::SharedKey;
 
     fn public(key : &Self::Private) -> Self::Public{
-        unimplemented!();
+        curve25519::derive_public_key(key)
     }
     fn shared(mine : &Self::Private, theirs : &Self::Public) -> Self::Shared{
-        unimplemented!();
+        curve25519::derive_shared_key( mine,theirs)
     }
 }
 
+pub fn ident_to_ratchet(ident : DHKeyPair<IdentityKey> ) -> DHKeyPair<RatchetKey> {
+    DHKeyPair{key: ident.key, public:ident.public}
+} 
+
 pub struct RatchetKey;
 impl axolotl::DH for RatchetKey {
-    type Private = [u8;32];
-    type Public = [u8;32];
-    type Shared = [u8;32];
+    type Private = curve25519::PrivateKey;
+    type Public = curve25519::PublicKey;
+    type Shared = curve25519::SharedKey;
 
     fn public(key : &Self::Private) -> Self::Public{
-        unimplemented!();
+        curve25519::derive_public_key(key)
     }
     fn shared(mine : &Self::Private, theirs : &Self::Public) -> Self::Shared{
-        unimplemented!();
+        curve25519::derive_shared_key( mine,theirs)
     }
 
 }
@@ -102,7 +109,7 @@ impl ChainKey {
         to_array!(hmac_context.result().code()[..],KEY_LEN_CHAIN)
     }
 }
-
+#[derive(Debug)]
 #[derive(Clone)]
 pub struct MessageKey{
     cipher_key : [u8;32],
@@ -110,8 +117,15 @@ pub struct MessageKey{
     iv : [u8;16],
 }
 
-pub struct PlainText(Box<[u8]>);
+#[derive(Debug)]
+pub struct PlainText(pub Box<[u8]>);
 
+impl PlainText {
+    pub fn from_vec(data : Vec<u8>) -> PlainText {
+        PlainText(data.into_boxed_slice())
+    }
+}
+#[derive(Debug)]
 pub struct CipherTextAndVersion{
     cipher_text : Box<[u8]>,
     version : u8,
@@ -136,11 +150,11 @@ impl axolotl::Axolotl for TextSecureV3{
         local_handshake_remote_identity_dh_secred : &DHShared<Self::IdentityKey>, 
         local_handshake_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>) -> (Self::RootKey, Self::ChainKey){
         
-        let master_key : Vec<u8> = [  *local_identity_remote_handshake_dh_secret,
-                            *local_handshake_remote_identity_dh_secred,
-                            *local_handshake_remote_handshake_dh_secret]
+        let master_key : Vec<u8> = [  local_identity_remote_handshake_dh_secret,
+                            local_handshake_remote_identity_dh_secred,
+                            local_handshake_remote_handshake_dh_secret]
                             .iter()
-                            .flat_map(|x| {x})
+                            .flat_map(|x| {x.to_bytes()})
                             .map(|x|{*x})
                             .collect();
 
@@ -151,7 +165,7 @@ impl axolotl::Axolotl for TextSecureV3{
     /// Returns new Root and Chain keys derived from racheting previous keyset.
     fn derive_next_root_key_and_chain_key(root_key : Self::RootKey, ratchet : &<Self::RatchetKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey){
         let Rootkey( root_bytes ) = root_key;
-        let ikm : Vec<u8> = [root_bytes,*ratchet]
+        let ikm : Vec<u8> = [root_bytes,*ratchet.to_bytes()]
             .iter()
             .flat_map(|x| {x})
             .map(|x|{*x})
@@ -201,29 +215,32 @@ impl axolotl::Axolotl for TextSecureV3{
         receiver_identity : &DHPublic<Self::IdentityKey>) -> Self::Mac{
 
         let mut mac_state = hmac::HmacSha256::new(&message_key.mac_key);
-        mac_state.input(&sender_identity[..]);
-        mac_state.input(&receiver_identity[..]);
+        mac_state.input(sender_identity.to_bytes());
+        mac_state.input(receiver_identity.to_bytes());
         mac_state.input(&message.ciphertext.cipher_text[..]); //TODO: input the version
         hmac::truncate_mac_result(mac_state.result(), 8)
     }
 
     fn ratchet_keys_are_equal(key0 : &<Self::RatchetKey as DH>::Public, key1 : &<Self::RatchetKey as DH>::Public) -> bool{
-        unimplemented!();
+        key0 == key1
     }
     fn generate_ratchet_key_pair() -> DHKeyPair<Self::RatchetKey>{
-        unimplemented!();
+        let priv_key  = curve25519::generate_private_key();
+        let pub_key = curve25519::derive_public_key(&priv_key);
+
+        DHKeyPair{ key: priv_key, public : pub_key }
     }
 
     fn future_message_limit() -> u32{
-        unimplemented!();
+        2000
     }
     fn chain_message_limit() -> u32
     {
-        2000
+        WHOLE_BUNCH
     }
 
     fn skipped_chain_limit() -> usize{
-        unimplemented!();
+        5
     }
 }
 
@@ -248,18 +265,18 @@ fn generate_message_key(input_key_material : &[u8] , info : &[u8], salt : &[u8] 
 
 /// Partitions an array literal into 2 dijoint array literals.
 fn split_raw_keys(bytes: [u8; KEY_LEN_ROOT+KEY_LEN_CHAIN]) -> ([u8;KEY_LEN_ROOT], [u8;KEY_LEN_CHAIN]) {
-    let root_key  : [u8; KEY_LEN_ROOT]  = to_array!( bytes[             ..KEY_LEN_ROOT  ], KEY_LEN_ROOT );
-    let chain_key : [u8; KEY_LEN_CHAIN] = to_array!( bytes[ KEY_LEN_ROOT..KEY_LEN_CHAIN ], KEY_LEN_CHAIN );
-
+    let root_key  : [u8; KEY_LEN_ROOT]  = to_array!( bytes[             .. KEY_LEN_ROOT                 ], KEY_LEN_ROOT );
+    let chain_key : [u8; KEY_LEN_CHAIN] = to_array!( bytes[ KEY_LEN_ROOT.. KEY_LEN_ROOT + KEY_LEN_CHAIN ], KEY_LEN_CHAIN );
     (root_key,chain_key)
 }
 
-/// Partitions an array literal into 3 dijoint array literals.
+/// Partitions an array literal into 3 dijoint array literals corresponding to the CipherKey, 
+/// MacKey, and IV. These three items are used to create a MessageKey.
 fn split_raw_msg_keys(bytes: [u8; KEY_LEN_CIPHER+KEY_LEN_MAC+KEY_LEN_IV]) -> ([u8;KEY_LEN_CIPHER], [u8;KEY_LEN_MAC], [u8;KEY_LEN_IV]) {
-    let cipher_key  : [u8; KEY_LEN_CIPHER] = to_array!( bytes[                           ..KEY_LEN_CIPHER]  , KEY_LEN_CIPHER );
-    let mac_key     : [u8; KEY_LEN_MAC]    = to_array!( bytes[             KEY_LEN_CIPHER..KEY_LEN_MAC]     , KEY_LEN_MAC );
-    let iv          : [u8; KEY_LEN_IV]     = to_array!( bytes[ KEY_LEN_CIPHER+KEY_LEN_MAC..  ]              , KEY_LEN_IV );
+    const MAC_OFFSET : usize = KEY_LEN_CIPHER+KEY_LEN_MAC;
+    let cipher_key  : [u8; KEY_LEN_CIPHER] = to_array!( bytes[               ..KEY_LEN_CIPHER   ]   , KEY_LEN_CIPHER );
+    let mac_key     : [u8; KEY_LEN_MAC]    = to_array!( bytes[ KEY_LEN_CIPHER..MAC_OFFSET       ]   , KEY_LEN_MAC );
+    let iv          : [u8; KEY_LEN_IV]     = to_array!( bytes[     MAC_OFFSET..                 ]   , KEY_LEN_IV );
 
     (cipher_key,mac_key,iv)
 }
-
