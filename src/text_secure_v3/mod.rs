@@ -1,5 +1,5 @@
 use ::axolotl;
-use ::axolotl::{AxolotlMessage,DH,DHKeyPair,DHPrivate,DHPublic,DHShared};
+use ::axolotl::{AxolotlMessage,DH,DHKeyPair,DHPublic,DHShared};
 use ::crypto_wrappers::aes_cbc;
 use ::crypto_wrappers::curve25519;
 use ::crypto_wrappers::hkdf;
@@ -18,7 +18,6 @@ macro_rules! to_array(
 );
 
 const WHOLE_BUNCH   : u32   = !0 as u32;  // Compiler doesn't like u32::MAX interim fix
-const HMAC_LEN      : usize = 32;
 
 const KEY_LEN_CHAIN : usize = 32;
 const KEY_LEN_ROOT  : usize = 32;
@@ -30,32 +29,8 @@ const SEED_NULL     : [u8;1] = [0];
 const SEED_MSG_KEY  : [u8;1] = [1];
 const SEED_CHAIN_KEY: [u8;1] = [2];
 
-pub struct TextSecureV3{
-    my_identity_key : axolotl::DHPublic<IdentityKey>,
-    their_identity_key : axolotl::DHPublic<IdentityKey>,
-}
-impl TextSecureV3{
-    pub fn new(my_identity_key : axolotl::DHPublic<IdentityKey>, 
-               their_identity_key : axolotl::DHPublic<IdentityKey>,) 
-               -> TextSecureV3{
-        TextSecureV3{my_identity_key : my_identity_key, their_identity_key: their_identity_key}
-    } 
-    fn match_mac_from_keys_and_bytes_to_truncated_mac (serialized_message_bytes : &[u8],
-                                          mac_key : [u8;32],
-                                          sender_public_key : &axolotl::DHPublic<IdentityKey>,
-                                          receiver_public_key : &axolotl::DHPublic<IdentityKey>,
-                                          truncated_mac : [u8;8])
-                                          -> bool{
-        let mut mac_context= hmac::HmacSha256::new(&mac_key);
-        mac_context.input(sender_public_key.to_bytes());
-        mac_context.input(receiver_public_key.to_bytes());
-        mac_context.input(serialized_message_bytes);
-        let mac_result = mac_context.result();
-        let bytes = &mac_result.code()[0..8];
-        bytes == truncated_mac
-    }
+pub struct TextSecureV3;
 
-}
 pub struct IdentityKey;
 
 impl axolotl::DH for IdentityKey {
@@ -98,7 +73,6 @@ pub struct ChainKey ([u8;KEY_LEN_CHAIN]);          // Should this have an indexV
 
 impl ChainKey {
     fn next(self : &Self) -> ChainKey {
-        let ChainKey(key_bytes) = *self;  
         ChainKey(self.hmac(&SEED_CHAIN_KEY))
     }
 

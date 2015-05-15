@@ -76,9 +76,6 @@ impl PrivateKey {
     pub fn from_bytes(bytes : [u8 ; PRIV_KEY_LEN]) -> Self {
         PrivateKey{val: bytes}
     }
-    pub fn to_bytes(&self) -> &[u8;PRIV_KEY_LEN] {
-        &self.val
-    }
 }
 
 #[derive(Clone)]
@@ -86,10 +83,6 @@ pub struct SharedKey {
     val: [u8;SHARED_KEY_LEN],
 }
 impl SharedKey {
-    fn from_bytes(bytes : [u8 ; SHARED_KEY_LEN]) -> Self {
-        SharedKey{val: bytes}
-    }
-
     pub fn to_bytes(&self) -> &[u8;SHARED_KEY_LEN] {
         &self.val
     }
@@ -133,7 +126,7 @@ mod tests {
         let bob_pub  = PublicKey::from_bytes(bob_public_bytes);
         let bob_priv = PrivateKey::from_bytes(bob_private_bytes);
 
-        let expected_shared = SharedKey::from_bytes(shared_bytes);
+        let expected_shared = SharedKey{val:shared_bytes};
 
         let alice_shared = derive_shared_key(&alice_priv,&bob_pub);
         let bob_shared   = derive_shared_key(&bob_priv,&alice_pub);

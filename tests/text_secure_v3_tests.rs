@@ -1,13 +1,11 @@
-#![feature(collections)]
-
 #[macro_use(to_array)]
 extern crate raxolotl;
 
 use raxolotl::axolotl;
 
 use raxolotl::text_secure_v3;
-use raxolotl::text_secure_v3::{IdentityKey,TextSecureV3, PlainText,CipherTextAndVersion};
-use raxolotl::axolotl::{Axolotl,DH, DHPublic,DHPrivate,DHShared,DHKeyPair, DHExchangedPair};
+use raxolotl::text_secure_v3::{IdentityKey,TextSecureV3, PlainText};
+use raxolotl::axolotl::{DH,DHKeyPair, DHExchangedPair};
 use raxolotl::crypto_wrappers::curve25519;
 
 
@@ -21,7 +19,7 @@ fn dynamic_roundtrip_echo(){
 
     let (mut alice, mut bob ) = init_dynamic_axolotl_states();
 
-    let msg = PlainText::from_vec(String::from_str("hello goat!").into_bytes());
+    let msg = PlainText::from_vec("hello goat!".to_string().into_bytes());
 
     for __ in 0..10 {
         let (wm, mac) = alice.encrypt(&msg);
