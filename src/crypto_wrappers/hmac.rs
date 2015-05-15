@@ -27,6 +27,10 @@ impl HmacSha256 {
     }
 }
 
+pub fn truncate_mac_result(mac : MacResult, length : usize) -> MacResult {
+    MacResult::new(&mac.code()[..length])
+}
+
 pub fn hmac_compare_prefix(expected : MacResult, value : &[u8]) -> bool {
     let expected_bytes = expected.code();
     let value_len = value.len();

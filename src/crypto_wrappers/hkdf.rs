@@ -4,7 +4,6 @@ extern crate crypto;
 use crypto::sha2::Sha256;
 use crypto::hkdf;
 use crypto::digest::Digest;     // False Warning
-use std::iter::repeat;
 
 const DIGEST_LENGTH : usize = 32;
 

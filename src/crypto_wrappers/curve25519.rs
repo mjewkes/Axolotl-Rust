@@ -53,6 +53,8 @@ pub fn generate_private_key() -> PrivateKey{
     PrivateKey::from_bytes(*private_key)
 }
 
+#[derive(Clone)]
+#[derive(PartialEq)]
 pub struct PublicKey {
     val: [u8;PUB_KEY_LEN],
 }
@@ -66,23 +68,21 @@ impl PublicKey {
     }
 }
 
+#[derive(Clone)]
 pub struct PrivateKey {
     val: [u8;PRIV_KEY_LEN],
 }
 impl PrivateKey {
-    fn from_bytes(bytes : [u8 ; SHARED_KEY_LEN]) -> Self {
+    pub fn from_bytes(bytes : [u8 ; PRIV_KEY_LEN]) -> Self {
         PrivateKey{val: bytes}
     }
 }
 
+#[derive(Clone)]
 pub struct SharedKey {
     val: [u8;SHARED_KEY_LEN],
 }
 impl SharedKey {
-    fn from_bytes(bytes : [u8 ; SHARED_KEY_LEN]) -> Self {
-        SharedKey{val: bytes}
-    }
-
     pub fn to_bytes(&self) -> &[u8;SHARED_KEY_LEN] {
         &self.val
     }
@@ -126,7 +126,7 @@ mod tests {
         let bob_pub  = PublicKey::from_bytes(bob_public_bytes);
         let bob_priv = PrivateKey::from_bytes(bob_private_bytes);
 
-        let expected_shared = SharedKey::from_bytes(shared_bytes);
+        let expected_shared = SharedKey{val:shared_bytes};
 
         let alice_shared = derive_shared_key(&alice_priv,&bob_pub);
         let bob_shared   = derive_shared_key(&bob_priv,&alice_pub);
@@ -157,7 +157,7 @@ mod tests {
         PublicKey{val: *key.to_bytes()}
     }
 
-    const LOOP_ITERATIONS : u32 = 1000;
+    const LOOP_ITERATIONS : u32 = 10;
     #[test]
     fn loop_test(){
         let mut e1 = [0x03, 0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00];
