@@ -90,7 +90,7 @@ impl axolotl::Axolotl for TextSecureV3{
     type PlainText = PlainText;
     type CipherText = CipherTextAndVersion;
 
-    type Mac = ();
+    type Mac = hmac::MacResult;
 
      fn derive_initial_root_key_and_chain_key(
         local_identity_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>, 
@@ -138,7 +138,11 @@ impl axolotl::Axolotl for TextSecureV3{
         sender_identity : &DHPublic<Self::IdentityKey>, 
         receiver_identity : &DHPublic<Self::IdentityKey>) -> Self::Mac{
 
-        unimplemented!();
+        let mut mac_state = hmac::HmacSha256::new(&message_key.mac_key);
+        mac_state.input(&sender_identity[..]);
+        mac_state.input(&receiver_identity[..]);
+        mac_state.input(&message.ciphertext.cipher_text[..]); //TODO: input the version
+        hmac::truncate_mac_result(mac_state.result(), 8)
     }
 
     fn ratchet_keys_are_equal(key0 : &<Self::RatchetKey as DH>::Public, key1 : &<Self::RatchetKey as DH>::Public) -> bool{
