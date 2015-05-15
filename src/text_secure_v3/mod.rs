@@ -136,9 +136,13 @@ impl axolotl::Axolotl for TextSecureV3{
         local_handshake_remote_identity_dh_secred : &DHShared<Self::IdentityKey>, 
         local_handshake_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>) -> (Self::RootKey, Self::ChainKey){
         
-        let master_key = [  *local_identity_remote_handshake_dh_secret,
+        let master_key : Vec<u8> = [  *local_identity_remote_handshake_dh_secret,
                             *local_handshake_remote_identity_dh_secred,
-                            *local_handshake_remote_handshake_dh_secret].concat();
+                            *local_handshake_remote_handshake_dh_secret]
+                            .iter()
+                            .flat_map(|x| {x})
+                            .map(|x|{*x})
+                            .collect();
 
         let (rk, ck) = keys_from_kdf(&master_key[..], "WhisperText".as_bytes(),&SEED_NULL);
         (Rootkey(rk),ChainKey(ck))
@@ -147,7 +151,11 @@ impl axolotl::Axolotl for TextSecureV3{
     /// Returns new Root and Chain keys derived from racheting previous keyset.
     fn derive_next_root_key_and_chain_key(root_key : Self::RootKey, ratchet : &<Self::RatchetKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey){
         let Rootkey( root_bytes ) = root_key;
-        let ikm = [root_bytes,*ratchet].concat();
+        let ikm : Vec<u8> = [root_bytes,*ratchet]
+            .iter()
+            .flat_map(|x| {x})
+            .map(|x|{*x})
+            .collect();
 
         let (rk,ck) = keys_from_kdf(&ikm,"WhisperRatchet".as_bytes(),&root_bytes);
 
