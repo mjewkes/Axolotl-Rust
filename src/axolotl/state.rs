@@ -56,7 +56,7 @@ pub fn init_as_alice<T>(
         let ab0 = <T::IdentityKey as DH>::shared(&identity_keys.mine, &handshake_keys.theirs);
         let a0b = <T::IdentityKey as DH>::shared(&handshake_keys.mine, &identity_keys.theirs);
         let a0b0 = <T::IdentityKey as DH>::shared(&handshake_keys.mine, &handshake_keys.theirs);
-        let (pre_root_key, chain_key_recv) = T::derive_initial_root_key_and_chain_key(&ab0, &a0b0, &a0b0);
+        let (pre_root_key, chain_key_recv) = T::derive_initial_root_key_and_chain_key(&ab0, &a0b, &a0b0);
         let ratchet_key = T::generate_ratchet_key_pair();
         let ratchet_key_shared = <T::RatchetKey as DH>::shared(&ratchet_key.key, initial_ratchet_key);
         let (root_key,chain_key_send) = T::derive_next_root_key_and_chain_key(pre_root_key, &ratchet_key_shared);
@@ -83,10 +83,10 @@ pub fn init_as_bob<T>(
     initial_ratchet_key : DHKeyPair<T::RatchetKey>) 
 -> AxolotlState<T> 
     where T:Axolotl {
-        let a0b = <T::IdentityKey as DH>::shared(&identity_keys.mine, &handshake_keys.theirs);
         let ab0 = <T::IdentityKey as DH>::shared(&handshake_keys.mine, &identity_keys.theirs);
+        let a0b = <T::IdentityKey as DH>::shared(&identity_keys.mine, &handshake_keys.theirs);
         let a0b0 = <T::IdentityKey as DH>::shared(&handshake_keys.mine, &handshake_keys.theirs);
-        let (root_key, chain_key_send) = T::derive_initial_root_key_and_chain_key(&ab0, &a0b0, &a0b0);
+        let (root_key, chain_key_send) = T::derive_initial_root_key_and_chain_key(&ab0, &a0b, &a0b0);
         AxolotlState {
             root_key : root_key,
             identity_key_local : <T::IdentityKey as DH>::public(&identity_keys.mine),
