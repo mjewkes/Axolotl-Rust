@@ -51,7 +51,7 @@ impl Axolotl for Substitution {
     type Mac = ();
 
     fn derive_initial_root_key_and_chain_key(a : &u64, b : &u64, c : &u64) -> (u64,u64) {
-        let seed = *a ^ *b ^ *c;
+        let seed = *a ^ b.wrapping_mul(31) ^ c.wrapping_mul(31*31);
         let mut rng = get_rng(seed);
         let root_key = rng.next_u64();
         let chain_key = rng.next_u64();
