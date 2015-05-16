@@ -128,16 +128,9 @@ impl <T:Axolotl> ReceiveChain<T> {
         return Some(self.message_keys.pop().unwrap().1);
     }
 }
-impl <T:Axolotl> AxolotlState<T> {
 
+impl <T: Axolotl> AxolotlState<T> {
     pub fn encrypt(&mut self, plaintext : &T::PlainText) -> (AxolotlMessage<T>, T::Mac) {
-        let mut self_clone = Clone::clone(self);
-        let result = self_clone.try_encrypt(plaintext);
-        *self = self_clone;
-        result
-    }
-
-    fn try_encrypt(&mut self, plaintext : &T::PlainText) -> (AxolotlMessage<T>, T::Mac) {
         let (new_chain_key, message_key) = T::derive_next_chain_and_message_key(&self.chain_key_send);
         let ciphertext = T::encrypt_message(&message_key, plaintext);
 
@@ -150,7 +143,7 @@ impl <T:Axolotl> AxolotlState<T> {
         self.chain_key_send = new_chain_key;
         self.message_number_send += 1;
 
-        (message,mac)
+        (message, mac)
     }
 
     pub fn decrypt(&mut self, message : &AxolotlMessage<T>, mac : T::Mac) -> Option<T::PlainText> {
