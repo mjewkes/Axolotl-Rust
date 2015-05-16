@@ -90,15 +90,25 @@ pub struct MessageKey{
 #[derive(Debug)]
 pub struct PlainText(pub Box<[u8]>);
 
-impl PlainText {
-    pub fn from_vec(data : Vec<u8>) -> PlainText {
+impl From<Vec<u8>> for PlainText {
+    fn from(data: Vec<u8>) -> Self {
         PlainText(data.into_boxed_slice())
     }
 }
+
 #[derive(Debug)]
 pub struct CipherTextAndVersion{
     cipher_text : Box<[u8]>,
     version : u8,
+}
+
+impl From<(u8, Vec<u8>)> for CipherTextAndVersion {
+    fn from((version, data): (u8, Vec<u8>)) -> CipherTextAndVersion {
+        CipherTextAndVersion {
+            cipher_text: data.into_boxed_slice(),
+            version: version
+        }
+    }
 }
 
 impl axolotl::Axolotl for TextSecureV3{
@@ -155,16 +165,11 @@ impl axolotl::Axolotl for TextSecureV3{
     }
 
     fn encrypt_message(message_key : &Self::MessageKey,
-                      plaintext : &Self::PlainText)
-                      -> Self::CipherText{
-
-        let PlainText(ref text) = *plaintext;
+                       &PlainText(ref text) : &Self::PlainText)
+                       -> Self::CipherText {
         let ciphertext = aes_cbc::encrypt_aes256_cbc_mode(text,message_key.cipher_key, message_key.iv);
 
-        CipherTextAndVersion {
-            version : 3,
-            cipher_text : ciphertext.into_boxed_slice(),
-        }
+        (3, ciphertext).into()
     }
 
     fn decrypt_message(message_key : &Self::MessageKey,
@@ -174,16 +179,17 @@ impl axolotl::Axolotl for TextSecureV3{
             return None;
         }
 
-        let result = aes_cbc::decrypt_aes256_cbc_mode(&ciphertext.cipher_text, message_key.cipher_key, message_key.iv);
-        Some(PlainText(result.into_boxed_slice()))
+        let result = aes_cbc::decrypt_aes256_cbc_mode(&ciphertext.cipher_text,
+                                                      message_key.cipher_key,
+                                                      message_key.iv);
+        Some(result.into())
     }
 
-    fn authenticate_message(
-        message : &AxolotlMessage<Self>,
-        message_key : &Self::MessageKey,
-        sender_identity : &DHPublic<Self::IdentityKey>,
-        receiver_identity : &DHPublic<Self::IdentityKey>) -> Self::Mac{
-
+    fn authenticate_message(message : &AxolotlMessage<Self>,
+                            message_key : &Self::MessageKey,
+                            sender_identity : &DHPublic<Self::IdentityKey>,
+                            receiver_identity : &DHPublic<Self::IdentityKey>)
+            -> Self::Mac {
         let mut mac_state = hmac::HmacSha256::new(&message_key.mac_key);
         mac_state.input(sender_identity.to_bytes());
         mac_state.input(receiver_identity.to_bytes());

@@ -14,7 +14,7 @@ fn dynamic_roundtrip_echo(){
 
     let (mut alice, mut bob ) = init_dynamic_axolotl_states();
 
-    let msg = PlainText::from_vec("hello goat!".to_string().into_bytes());
+    let msg : PlainText = b"hello goat!".to_vec().into();
 
     for __ in 0..10 {
         let (wm, mac) = alice.encrypt(&msg);
