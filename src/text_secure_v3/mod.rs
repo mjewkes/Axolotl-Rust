@@ -21,7 +21,7 @@ const KEY_LEN_MAC   : usize = 32;
 const KEY_LEN_CIPHER: usize = 32;
 const KEY_LEN_IV    : usize = 16;
 
-const SEED_NULL     : [u8;1] = [0]; 
+const SEED_NULL     : [u8;1] = [0];
 const SEED_MSG_KEY  : [u8;1] = [1];
 const SEED_CHAIN_KEY: [u8;1] = [2];
 
@@ -44,7 +44,7 @@ impl axolotl::DH for IdentityKey {
 
 pub fn ident_to_ratchet(ident : DHKeyPair<IdentityKey> ) -> DHKeyPair<RatchetKey> {
     DHKeyPair{key: ident.key, public:ident.public}
-} 
+}
 
 pub struct RatchetKey;
 impl axolotl::DH for RatchetKey {
@@ -72,10 +72,10 @@ impl ChainKey {
         ChainKey(self.hmac(&SEED_CHAIN_KEY))
     }
 
-    fn hmac(self : &Self, seed : &[u8] ) -> [u8;KEY_LEN_CHAIN] {  
-        let ChainKey(key_bytes) = *self;  
+    fn hmac(self : &Self, seed : &[u8] ) -> [u8;KEY_LEN_CHAIN] {
+        let ChainKey(key_bytes) = *self;
         let mut hmac_context = hmac::HmacSha256::new(&key_bytes);
-        hmac_context.input(seed);                           
+        hmac_context.input(seed);
         to_array!(hmac_context.result().code()[..],KEY_LEN_CHAIN)
     }
 }
@@ -114,12 +114,12 @@ impl axolotl::Axolotl for TextSecureV3{
 
     type Mac = hmac::MacResult;
 
-    /// Returns initial Root and Chain keys derived from initial the TripleDH handshake. 
+    /// Returns initial Root and Chain keys derived from initial the TripleDH handshake.
     fn derive_initial_root_key_and_chain_key(
-        local_identity_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>, 
-        local_handshake_remote_identity_dh_secred : &DHShared<Self::IdentityKey>, 
+        local_identity_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>,
+        local_handshake_remote_identity_dh_secred : &DHShared<Self::IdentityKey>,
         local_handshake_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>) -> (Self::RootKey, Self::ChainKey){
-        
+
         let master_key : Vec<u8> = [  local_identity_remote_handshake_dh_secret,
                             local_handshake_remote_identity_dh_secred,
                             local_handshake_remote_handshake_dh_secret]
@@ -148,27 +148,27 @@ impl axolotl::Axolotl for TextSecureV3{
 
     /// Returns derived Message key for given Chain key as well as the next Chain key to be used.
     fn derive_next_chain_and_message_key(chain_key : &Self::ChainKey) -> (Self::ChainKey, Self::MessageKey){
- 
-        let ikm = chain_key.hmac( &SEED_MSG_KEY ); 
+
+        let ikm = chain_key.hmac( &SEED_MSG_KEY );
         let msg_key = generate_message_key(&ikm,"WhisperMessage".as_bytes(),&SEED_NULL);
         (chain_key.next(),msg_key)
     }
-    
-    fn encrypt_message(message_key : &Self::MessageKey, 
-                      plaintext : &Self::PlainText) 
+
+    fn encrypt_message(message_key : &Self::MessageKey,
+                      plaintext : &Self::PlainText)
                       -> Self::CipherText{
 
         let PlainText(ref text) = *plaintext;
         let ciphertext = aes_cbc::encrypt_aes256_cbc_mode(text,message_key.cipher_key, message_key.iv);
-        
+
         CipherTextAndVersion {
             version : 3,
             cipher_text : ciphertext.into_boxed_slice(),
         }
     }
 
-    fn decrypt_message(message_key : &Self::MessageKey, 
-                      ciphertext : &Self::CipherText) 
+    fn decrypt_message(message_key : &Self::MessageKey,
+                      ciphertext : &Self::CipherText)
                       -> Option<Self::PlainText>{
         if ciphertext.version != 3 {
             return None;
@@ -179,9 +179,9 @@ impl axolotl::Axolotl for TextSecureV3{
     }
 
     fn authenticate_message(
-        message : &AxolotlMessage<Self>, 
-        message_key : &Self::MessageKey, 
-        sender_identity : &DHPublic<Self::IdentityKey>, 
+        message : &AxolotlMessage<Self>,
+        message_key : &Self::MessageKey,
+        sender_identity : &DHPublic<Self::IdentityKey>,
         receiver_identity : &DHPublic<Self::IdentityKey>) -> Self::Mac{
 
         let mut mac_state = hmac::HmacSha256::new(&message_key.mac_key);
@@ -216,7 +216,7 @@ impl axolotl::Axolotl for TextSecureV3{
 
 /// Returns bytes of the dervived root and chain keys.
 fn keys_from_kdf(input_key_material : &[u8] , info : &[u8], salt : &[u8]  ) -> ([u8;KEY_LEN_ROOT], [u8;KEY_LEN_CHAIN]) {
-    let mut output_key_material :[u8; KEY_LEN_ROOT + KEY_LEN_CHAIN ] = [0; KEY_LEN_ROOT + KEY_LEN_CHAIN]; 
+    let mut output_key_material :[u8; KEY_LEN_ROOT + KEY_LEN_CHAIN ] = [0; KEY_LEN_ROOT + KEY_LEN_CHAIN];
     hkdf::derive_key(input_key_material, info,salt,&mut output_key_material);
 
     split_raw_keys(output_key_material)
@@ -240,7 +240,7 @@ fn split_raw_keys(bytes: [u8; KEY_LEN_ROOT+KEY_LEN_CHAIN]) -> ([u8;KEY_LEN_ROOT]
     (root_key,chain_key)
 }
 
-/// Partitions an array literal into 3 dijoint array literals corresponding to the CipherKey, 
+/// Partitions an array literal into 3 dijoint array literals corresponding to the CipherKey,
 /// MacKey, and IV. These three items are used to create a MessageKey.
 fn split_raw_msg_keys(bytes: [u8; KEY_LEN_CIPHER+KEY_LEN_MAC+KEY_LEN_IV]) -> ([u8;KEY_LEN_CIPHER], [u8;KEY_LEN_MAC], [u8;KEY_LEN_IV]) {
     const MAC_OFFSET : usize = KEY_LEN_CIPHER+KEY_LEN_MAC;

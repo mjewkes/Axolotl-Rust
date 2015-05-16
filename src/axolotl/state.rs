@@ -46,10 +46,10 @@ impl <T:Axolotl> Clone for ReceiveChain<T> {
 
 
 pub fn init_as_alice<T>(
-    identity_keys : &DHExchangedPair<T::IdentityKey>, 
-    handshake_keys : &DHExchangedPair<T::IdentityKey>, 
-    initial_ratchet_key : &DHPublic<T::RatchetKey>) 
--> AxolotlState<T> 
+    identity_keys : &DHExchangedPair<T::IdentityKey>,
+    handshake_keys : &DHExchangedPair<T::IdentityKey>,
+    initial_ratchet_key : &DHPublic<T::RatchetKey>)
+-> AxolotlState<T>
     where T:Axolotl {
         let ab0 = <T::IdentityKey as DH>::shared(&identity_keys.mine, &handshake_keys.theirs);
         let a0b = <T::IdentityKey as DH>::shared(&handshake_keys.mine, &identity_keys.theirs);
@@ -76,10 +76,10 @@ pub fn init_as_alice<T>(
 }
 
 pub fn init_as_bob<T>(
-    identity_keys : &DHExchangedPair<T::IdentityKey>, 
-    handshake_keys : &DHExchangedPair<T::IdentityKey>, 
-    initial_ratchet_key : DHKeyPair<T::RatchetKey>) 
--> AxolotlState<T> 
+    identity_keys : &DHExchangedPair<T::IdentityKey>,
+    handshake_keys : &DHExchangedPair<T::IdentityKey>,
+    initial_ratchet_key : DHKeyPair<T::RatchetKey>)
+-> AxolotlState<T>
     where T:Axolotl {
         let ab0 = <T::IdentityKey as DH>::shared(&handshake_keys.mine, &identity_keys.theirs);
         let a0b = <T::IdentityKey as DH>::shared(&identity_keys.mine, &handshake_keys.theirs);
@@ -152,11 +152,11 @@ impl <T:Axolotl> AxolotlState<T> {
 
         (message,mac)
     }
-    
+
     pub fn decrypt(&mut self, message : &AxolotlMessage<T>, mac : T::Mac) -> Option<T::PlainText> {
         let mut self_clone = Clone::clone(self);
         let result = self_clone.try_decrypt(message, mac);
-        
+
         if let Some(_) = result {
             *self = self_clone
         }
@@ -200,14 +200,14 @@ impl <T:Axolotl> AxolotlState<T> {
                 let new_ratchet_key_send = T::generate_ratchet_key_pair();
                 let new_ratchet_key_shared = <T::RatchetKey as DH>::shared(&new_ratchet_key_send.key, &ratchet_key_theirs);
                 let (root_key, chain_key_send) = T::derive_next_root_key_and_chain_key(receiver_root_key, &new_ratchet_key_shared);
-        
+
                 let new_receive_chain = ReceiveChain {
                     chain_key : receiver_chain_key,
                     chain_key_index : 0,
                     ratchet_key : ratchet_key_theirs.clone(),
                     message_keys : Vec::new(),
                 };
-        
+
                 let truncate_to = T::skipped_chain_limit();
 
                 self.receive_chains.insert(0, new_receive_chain);

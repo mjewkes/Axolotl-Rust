@@ -34,7 +34,7 @@ fn dhkey_pair() -> DHKeyPair<IdentityKey> {
     let pub_key = curve25519::derive_public_key(&priv_key);
 
     DHKeyPair{ key :priv_key, public : pub_key}
-} 
+}
 
 
 fn init_dynamic_axolotl_states() -> (axolotl::AxolotlState<TextSecureV3>, axolotl::AxolotlState<TextSecureV3>) {
