@@ -127,41 +127,34 @@ impl axolotl::Axolotl for TextSecureV3{
     /// Returns initial Root and Chain keys derived from initial the TripleDH handshake.
     fn derive_initial_root_key_and_chain_key(
         local_identity_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>,
-        local_handshake_remote_identity_dh_secred : &DHShared<Self::IdentityKey>,
-        local_handshake_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>) -> (Self::RootKey, Self::ChainKey){
+        local_handshake_remote_identity_dh_secret : &DHShared<Self::IdentityKey>,
+        local_handshake_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>)
+            -> (Self::RootKey, Self::ChainKey) {
 
-        let master_key : Vec<u8> = [  local_identity_remote_handshake_dh_secret,
-                            local_handshake_remote_identity_dh_secred,
-                            local_handshake_remote_handshake_dh_secret]
-                            .iter()
-                            .flat_map(|x| {x.to_bytes()})
-                            .map(|x|{*x})
-                            .collect();
+        let secrets :&[&[u8]] = &[local_identity_remote_handshake_dh_secret.to_bytes(),
+                                  local_handshake_remote_identity_dh_secret.to_bytes(),
+                                  local_handshake_remote_handshake_dh_secret.to_bytes()];
 
-        let (rk, ck) = keys_from_kdf(&master_key[..], "WhisperText".as_bytes(),&SEED_NULL);
+        let (rk, ck) = keys_from_kdf(&secrets.concat(), b"WhisperText", &SEED_NULL);
         (Rootkey(rk),ChainKey(ck))
     }
 
     /// Returns new Root and Chain keys derived from racheting previous keyset.
     fn derive_next_root_key_and_chain_key(root_key : Self::RootKey, ratchet : &<Self::RatchetKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey){
         let Rootkey( root_bytes ) = root_key;
-        let ikm : Vec<u8> = [root_bytes,*ratchet.to_bytes()]
-            .iter()
-            .flat_map(|x| {x})
-            .map(|x|{*x})
-            .collect();
+        let keys : &[&[u8]] = &[&root_bytes, ratchet.to_bytes()];
 
-        let (rk,ck) = keys_from_kdf(&ikm,"WhisperRatchet".as_bytes(),&root_bytes);
+        let (rk,ck) = keys_from_kdf(&keys.concat(), b"WhisperRatchet", &root_bytes);
 
-        (Rootkey(rk),ChainKey(ck))
+        (Rootkey(rk), ChainKey(ck))
     }
 
     /// Returns derived Message key for given Chain key as well as the next Chain key to be used.
     fn derive_next_chain_and_message_key(chain_key : &Self::ChainKey) -> (Self::ChainKey, Self::MessageKey){
 
-        let ikm = chain_key.hmac( &SEED_MSG_KEY );
-        let msg_key = generate_message_key(&ikm,"WhisperMessage".as_bytes(),&SEED_NULL);
-        (chain_key.next(),msg_key)
+        let ikm = chain_key.hmac(&SEED_MSG_KEY);
+        let msg_key = generate_message_key(&ikm, b"WhisperMessage", &SEED_NULL);
+        (chain_key.next(), msg_key)
     }
 
     fn encrypt_message(message_key : &Self::MessageKey,
@@ -197,22 +190,25 @@ impl axolotl::Axolotl for TextSecureV3{
         hmac::truncate_mac_result(mac_state.result(), 8)
     }
 
-    fn generate_ratchet_key_pair() -> DHKeyPair<Self::RatchetKey>{
-        let priv_key  = curve25519::generate_private_key();
+    fn generate_ratchet_key_pair() -> DHKeyPair<Self::RatchetKey> {
+        let priv_key = curve25519::generate_private_key();
         let pub_key = curve25519::derive_public_key(&priv_key);
 
-        DHKeyPair{ key: priv_key, public : pub_key }
+        DHKeyPair {
+            key: priv_key,
+            public : pub_key
+        }
     }
 
-    fn future_message_limit() -> u32{
+    fn future_message_limit() -> u32 {
         2000
     }
-    fn chain_message_limit() -> u32
-    {
+
+    fn chain_message_limit() -> u32 {
         WHOLE_BUNCH
     }
 
-    fn skipped_chain_limit() -> usize{
+    fn skipped_chain_limit() -> usize {
         5
     }
 }
