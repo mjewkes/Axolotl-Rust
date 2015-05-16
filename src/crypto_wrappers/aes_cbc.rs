@@ -4,7 +4,7 @@ extern crate crypto;
 use crypto::{  aes, blockmodes ,buffer};
 use crypto::buffer::{ ReadBuffer, WriteBuffer, BufferResult };
 
-use crypto::symmetriccipher::SymmetricCipherError;   // gives False Warning 
+use crypto::symmetriccipher::Encryptor;
 
 pub const KEY_LEN : usize = 32;
 pub const IV_LEN  : usize = 16;
