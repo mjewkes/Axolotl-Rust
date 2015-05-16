@@ -1,3 +1,6 @@
+extern crate rand;
+extern crate raxolotl;
+
 mod toy_stream_cipher;
 use toy_stream_cipher::*;
 

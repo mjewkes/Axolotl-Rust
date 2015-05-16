@@ -1,10 +1,6 @@
-use ::axolotl;
-use ::axolotl::{AxolotlMessage,DH,DHKeyPair,DHPublic,DHShared};
-use ::crypto_wrappers::aes_cbc;
-use ::crypto_wrappers::curve25519;
-use ::crypto_wrappers::hkdf;
-use ::crypto_wrappers::hmac;
-
+use axolotl::{self, AxolotlMessage, DH, DHKeyPair, DHPublic, DHShared};
+use crypto_wrappers::{aes_cbc, curve25519, hkdf, hmac};
+use std::u32;
 
 #[macro_export]
 macro_rules! to_array(
@@ -17,7 +13,7 @@ macro_rules! to_array(
     });
 );
 
-const WHOLE_BUNCH   : u32   = !0 as u32;  // Compiler doesn't like u32::MAX interim fix
+const WHOLE_BUNCH   : u32 = u32::MAX;
 
 const KEY_LEN_CHAIN : usize = 32;
 const KEY_LEN_ROOT  : usize = 32;

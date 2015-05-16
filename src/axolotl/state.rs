@@ -1,6 +1,4 @@
-use super::axolotl::{Axolotl};
-use super::dh::{DH,DHExchangedPair,DHKeyPair,DHPublic};
-use super::message::{AxolotlMessage};
+use axolotl::{Axolotl, AxolotlMessage, DH, DHExchangedPair, DHKeyPair, DHPublic};
 
 pub struct AxolotlState<T> where T:Axolotl {
     root_key : T::RootKey,

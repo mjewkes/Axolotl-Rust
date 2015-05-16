@@ -1,8 +1,5 @@
-extern crate rand;
-extern crate raxolotl;
-
-use self::rand::*;
-use self::raxolotl::axolotl::*;
+use rand::*;
+use raxolotl::axolotl::*;
 
 pub struct DHKey;
 

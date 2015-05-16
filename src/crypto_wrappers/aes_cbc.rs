@@ -1,7 +1,6 @@
 /// Wrapper for external AES encryption Library
-use crypto::{  aes, blockmodes ,buffer};
-use crypto::buffer::{ ReadBuffer, WriteBuffer, BufferResult };
-
+use crypto::{aes, blockmodes, buffer};
+use crypto::buffer::{ReadBuffer, WriteBuffer, BufferResult};
 use crypto::symmetriccipher::Encryptor;
 
 pub const KEY_LEN : usize = 32;

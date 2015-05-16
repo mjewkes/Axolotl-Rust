@@ -1,7 +1,4 @@
-use std::option::{Option};
-
-use super::dh::{DH,DHKeyPair,DHShared,DHPublic};
-use super::message::{AxolotlMessage};
+use axolotl::{AxolotlMessage, DH, DHKeyPair, DHShared, DHPublic};
 
 pub trait Axolotl {
     type IdentityKey : DH;

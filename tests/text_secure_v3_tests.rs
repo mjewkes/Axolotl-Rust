@@ -1,13 +1,8 @@
-#[macro_use(to_array)]
 extern crate raxolotl;
 
-use raxolotl::axolotl;
-
-use raxolotl::text_secure_v3;
-use raxolotl::text_secure_v3::{IdentityKey,TextSecureV3, PlainText};
-use raxolotl::axolotl::{DH,DHKeyPair, DHExchangedPair};
+use raxolotl::text_secure_v3::{self, IdentityKey, TextSecureV3, PlainText};
+use raxolotl::axolotl::{self, DH, DHKeyPair, DHExchangedPair};
 use raxolotl::crypto_wrappers::curve25519;
-
 
 // #[test]
 // fn static_roundtrip_echo() {
