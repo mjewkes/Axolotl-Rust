@@ -156,25 +156,24 @@ impl <T: Axolotl> AxolotlState<T> {
 
         result
     }
+
     fn try_decrypt(&mut self, message : &AxolotlMessage<T>, mac : T::Mac) -> Option<T::PlainText> {
-        let message_key_or_none;
-        {
+        let message_key = {
             let receive_chain = self.get_or_create_receive_chain(&message.ratchet_key);
-            message_key_or_none = receive_chain.get_or_create_message_key(message.message_number);
-        }
+            receive_chain.get_or_create_message_key(message.message_number)
+        };
 
-        if let None = message_key_or_none  {
-            return None;
-        }
-        let message_key = message_key_or_none.unwrap();
-
-        let expected_mac = T::authenticate_message(message, &message_key, &self.identity_key_local, &self.identity_key_remote);
-        if expected_mac == mac {
-            T::decrypt_message(&message_key, &message.ciphertext)
-        }
-        else {
-            None
-        }
+        message_key.and_then(|message_key| {
+            let expected_mac = T::authenticate_message(message,
+                                                       &message_key,
+                                                       &self.identity_key_local,
+                                                       &self.identity_key_remote);
+            if expected_mac == mac {
+                T::decrypt_message(&message_key, &message.ciphertext)
+            } else {
+                None
+            }
+        })
     }
 
     fn get_or_create_receive_chain(&mut self, ratchet_key_theirs : &<T::RatchetKey as DH>::Public) -> &mut ReceiveChain<T> {
