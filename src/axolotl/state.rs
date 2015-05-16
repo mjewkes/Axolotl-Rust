@@ -178,14 +178,12 @@ impl <T: Axolotl> AxolotlState<T> {
 
     fn get_or_create_receive_chain(&mut self, ratchet_key_theirs : &<T::RatchetKey as DH>::Public) -> &mut ReceiveChain<T> {
         //TODO: comment on why this is, for loop early return breaks borrowing
-        let receive_chain_position =  self.receive_chains.iter().position(
-            | &ReceiveChain{ref ratchet_key, ..} | T::ratchet_keys_are_equal(ratchet_key, &ratchet_key_theirs)
-            );
+        let receive_chain_position = self.receive_chains
+                                         .iter()
+                                         .position(|c| c.ratchet_key == *ratchet_key_theirs);
 
         match receive_chain_position {
-            Some(pos) => {
-                &mut self.receive_chains[pos]
-            }
+            Some(pos) => &mut self.receive_chains[pos],
             None => {
                 let ratchet_key_shared = <T::RatchetKey as DH>::shared(&self.ratchet_key_send.key, &ratchet_key_theirs);
                 let (receiver_root_key, receiver_chain_key) = T::derive_next_root_key_and_chain_key(self.root_key.clone(), &ratchet_key_shared);

@@ -101,10 +101,6 @@ impl Axolotl for Substitution {
     fn authenticate_message(_ : &AxolotlMessage<Substitution>, _ : &u64, _ : &u64, _ : &u64) {
     }
 
-    fn ratchet_keys_are_equal(a : &u64, b : &u64) -> bool {
-        *a == *b
-    }
-
     fn generate_ratchet_key_pair() -> DHKeyPair<DHKey> {
         let key = next_rng().next_u64();
         let public = DHKey::public(&key);

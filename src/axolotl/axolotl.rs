@@ -48,11 +48,6 @@ pub trait Axolotl {
         receiver_identity : &DHPublic<Self::IdentityKey>)
     -> Self::Mac;
 
-    fn ratchet_keys_are_equal(
-        key0 : &DHPublic<Self::RatchetKey>,
-        key1 : &DHPublic<Self::RatchetKey>)
-    -> bool;
-
     fn generate_ratchet_key_pair()
     -> DHKeyPair<Self::RatchetKey>;
 

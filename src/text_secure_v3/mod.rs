@@ -191,9 +191,6 @@ impl axolotl::Axolotl for TextSecureV3{
         hmac::truncate_mac_result(mac_state.result(), 8)
     }
 
-    fn ratchet_keys_are_equal(key0 : &<Self::RatchetKey as DH>::Public, key1 : &<Self::RatchetKey as DH>::Public) -> bool{
-        key0 == key1
-    }
     fn generate_ratchet_key_pair() -> DHKeyPair<Self::RatchetKey>{
         let priv_key  = curve25519::generate_private_key();
         let pub_key = curve25519::derive_public_key(&priv_key);
