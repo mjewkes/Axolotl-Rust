@@ -1,4 +1,3 @@
-extern crate crypto;
 /// Library Abstraction for HMAC functionality
 
 //  Re-export MacResult so it is available when this Mod is imported.

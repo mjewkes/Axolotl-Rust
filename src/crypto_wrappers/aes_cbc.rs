@@ -1,6 +1,4 @@
 /// Wrapper for external AES encryption Library
-
-extern crate crypto;
 use crypto::{  aes, blockmodes ,buffer};
 use crypto::buffer::{ ReadBuffer, WriteBuffer, BufferResult };
 

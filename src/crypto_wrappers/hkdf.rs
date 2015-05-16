@@ -1,6 +1,4 @@
 /// HKDF Wrapper Function
-extern crate crypto;
-
 use crypto::sha2::Sha256;
 use crypto::hkdf;
 
@@ -17,8 +15,6 @@ pub fn derive_key(input_key_material : &[u8], info : &[u8] , salt : &[u8], outpu
 
 #[cfg(test)]
 mod tests {
-    extern crate crypto;
-
     use super::*;
 
      #[test]
