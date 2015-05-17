@@ -1,4 +1,5 @@
 use axolotl::{AxolotlMessage, DH, DHKeyPair, DHShared, DHPublic};
+use std::borrow::ToOwned;
 
 pub trait Axolotl {
     type IdentityKey : DH;
@@ -8,7 +9,7 @@ pub trait Axolotl {
     type ChainKey : Clone;
     type MessageKey : Clone;
 
-    type PlainText;
+    type PlainText: ToOwned + ?Sized;
     type CipherText;
 
     type Mac : PartialEq;
@@ -39,7 +40,7 @@ pub trait Axolotl {
     fn decrypt_message(
         message_key : &Self::MessageKey,
         cyphertext : &Self::CipherText)
-    -> Option<Self::PlainText>;
+    -> Option<<Self::PlainText as ToOwned>::Owned>;
 
     fn authenticate_message(
         message : &AxolotlMessage<Self>,

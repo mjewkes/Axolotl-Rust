@@ -14,18 +14,18 @@ fn dynamic_roundtrip_echo(){
 
     let (mut alice, mut bob ) = init_dynamic_axolotl_states();
 
-    let msg : PlainText = b"hello goat!".to_vec().into();
+    let msg : &PlainText = b"hello goat!";
 
     for __ in 0..10 {
         let (wm, mac) = alice.encrypt(&msg);
         let plaintext = bob.decrypt(&wm,mac).unwrap();
 
-        assert_eq!(msg.0 , plaintext.0);
+        assert_eq!(msg, &*plaintext);
 
         let (wmb, macb) = bob.encrypt(&plaintext);
         let reply = alice.decrypt(&wmb,macb).unwrap();
 
-        assert_eq!(msg.0,reply.0);
+        assert_eq!(msg, &*reply);
     }
 }
 

@@ -87,14 +87,7 @@ pub struct MessageKey{
     iv : [u8;16],
 }
 
-#[derive(Debug)]
-pub struct PlainText(pub Box<[u8]>);
-
-impl From<Vec<u8>> for PlainText {
-    fn from(data: Vec<u8>) -> Self {
-        PlainText(data.into_boxed_slice())
-    }
-}
+pub type PlainText = [u8];
 
 #[derive(Debug)]
 pub struct CipherTextAndVersion{
@@ -158,16 +151,16 @@ impl axolotl::Axolotl for TextSecureV3{
     }
 
     fn encrypt_message(message_key : &Self::MessageKey,
-                       &PlainText(ref text) : &Self::PlainText)
+                       bytes : &Self::PlainText)
                        -> Self::CipherText {
-        let ciphertext = aes_cbc::encrypt_aes256_cbc_mode(text,message_key.cipher_key, message_key.iv);
+        let ciphertext = aes_cbc::encrypt_aes256_cbc_mode(bytes, message_key.cipher_key, message_key.iv);
 
         (3, ciphertext).into()
     }
 
     fn decrypt_message(message_key : &Self::MessageKey,
                       ciphertext : &Self::CipherText)
-                      -> Option<Self::PlainText>{
+                      -> Option<<Self::PlainText as ToOwned>::Owned>{
         if ciphertext.version != 3 {
             return None;
         }

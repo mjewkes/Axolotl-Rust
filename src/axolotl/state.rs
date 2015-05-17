@@ -1,4 +1,5 @@
 use axolotl::{Axolotl, AxolotlMessage, DH, DHExchangedPair, DHKeyPair, DHPublic};
+use std::borrow::ToOwned;
 
 pub struct AxolotlState<T> where T:Axolotl {
     root_key : T::RootKey,
@@ -146,7 +147,8 @@ impl <T: Axolotl> AxolotlState<T> {
         (message, mac)
     }
 
-    pub fn decrypt(&mut self, message : &AxolotlMessage<T>, mac : T::Mac) -> Option<T::PlainText> {
+    pub fn decrypt(&mut self, message : &AxolotlMessage<T>, mac : T::Mac)
+                    -> Option<<T::PlainText as ToOwned>::Owned> {
         let mut self_clone = Clone::clone(self);
         let result = self_clone.try_decrypt(message, mac);
 
@@ -157,7 +159,8 @@ impl <T: Axolotl> AxolotlState<T> {
         result
     }
 
-    fn try_decrypt(&mut self, message : &AxolotlMessage<T>, mac : T::Mac) -> Option<T::PlainText> {
+    fn try_decrypt(&mut self, message : &AxolotlMessage<T>, mac : T::Mac)
+                    -> Option<<T::PlainText as ToOwned>::Owned> {
         let message_key = {
             let receive_chain = self.get_or_create_receive_chain(&message.ratchet_key);
             receive_chain.get_or_create_message_key(message.message_number)
