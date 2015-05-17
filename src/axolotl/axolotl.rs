@@ -32,9 +32,9 @@ pub trait Axolotl {
         chain_key : &Self::ChainKey)
     -> (Self::ChainKey, Self::MessageKey);
 
-    fn encrypt_message(
+    fn encrypt_message<P: AsRef<Self::PlainText>>(
         message_key : &Self::MessageKey,
-        plaintext : &Self::PlainText)
+        plaintext : P)
     -> Self::CipherText;
 
     fn decrypt_message(

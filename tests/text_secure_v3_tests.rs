@@ -1,6 +1,6 @@
 extern crate raxolotl;
 
-use raxolotl::text_secure_v3::{self, IdentityKey, TextSecureV3, PlainText};
+use raxolotl::text_secure_v3::{self, IdentityKey, TextSecureV3};
 use raxolotl::axolotl::{self, DH, DHKeyPair, DHExchangedPair};
 use raxolotl::crypto_wrappers::curve25519;
 
@@ -14,18 +14,18 @@ fn dynamic_roundtrip_echo(){
 
     let (mut alice, mut bob ) = init_dynamic_axolotl_states();
 
-    let msg : &PlainText = b"hello goat!";
+    let msg = "hello goat!";
 
     for __ in 0..10 {
-        let (wm, mac) = alice.encrypt(&msg);
+        let (wm, mac) = alice.encrypt(msg);
         let plaintext = bob.decrypt(&wm,mac).unwrap();
 
-        assert_eq!(msg, &*plaintext);
+        assert_eq!(msg.as_bytes(), &*plaintext);
 
-        let (wmb, macb) = bob.encrypt(&plaintext);
-        let reply = alice.decrypt(&wmb,macb).unwrap();
+        let (wmb, macb) = bob.encrypt(plaintext);
+        let reply = alice.decrypt(&wmb, macb).unwrap();
 
-        assert_eq!(msg, &*reply);
+        assert_eq!(msg.as_bytes(), &*reply);
     }
 }
 

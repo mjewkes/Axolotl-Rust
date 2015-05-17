@@ -150,10 +150,10 @@ impl axolotl::Axolotl for TextSecureV3{
         (chain_key.next(), msg_key)
     }
 
-    fn encrypt_message(message_key : &Self::MessageKey,
-                       bytes : &Self::PlainText)
-                       -> Self::CipherText {
-        let ciphertext = aes_cbc::encrypt_aes256_cbc_mode(bytes, message_key.cipher_key, message_key.iv);
+    fn encrypt_message<P: AsRef<Self::PlainText>>(message_key : &Self::MessageKey,
+                                                  bytes : P)
+                                                  -> Self::CipherText {
+        let ciphertext = aes_cbc::encrypt_aes256_cbc_mode(bytes.as_ref(), message_key.cipher_key, message_key.iv);
 
         (3, ciphertext).into()
     }

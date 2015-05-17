@@ -74,15 +74,14 @@ impl Axolotl for Substitution {
     }
 
 
-    fn encrypt_message(
-        key : &u64,
-        plaintext : &Vec<u8>)
-    -> Vec<u8> {
+    fn encrypt_message<P: AsRef<Self::PlainText>>(key : &Self::MessageKey,
+                                                  plaintext : P)
+                                                  -> Self::CipherText {
         let mut rng = get_rng(*key);
-        plaintext
-            .iter()
-            .map(|b|{rng.gen::<u8>() ^ b})
-            .collect()
+        plaintext.as_ref()
+                 .iter()
+                 .map(|b| rng.gen::<u8>() ^ b)
+                 .collect()
     }
 
 

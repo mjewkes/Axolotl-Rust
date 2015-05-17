@@ -131,7 +131,7 @@ impl <T:Axolotl> ReceiveChain<T> {
 }
 
 impl <T: Axolotl> AxolotlState<T> {
-    pub fn encrypt(&mut self, plaintext : &T::PlainText) -> (AxolotlMessage<T>, T::Mac) {
+    pub fn encrypt<P: AsRef<T::PlainText>>(&mut self, plaintext : P) -> (AxolotlMessage<T>, T::Mac) {
         let (new_chain_key, message_key) = T::derive_next_chain_and_message_key(&self.chain_key_send);
         let ciphertext = T::encrypt_message(&message_key, plaintext);
 
