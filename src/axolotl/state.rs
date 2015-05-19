@@ -144,13 +144,13 @@ impl <T:Axolotl> ReceiveChain<T> {
 impl <T:Axolotl> AxolotlState<T> {
 
     pub fn encrypt(&mut self, plaintext : &T::PlainText) -> (AxolotlMessage<T>, T::Mac) {
-        let mut self_clone = Clone::clone(self);
-        let result = self_clone.try_encrypt(plaintext);
-        *self = self_clone;
+        let (new_chain_key,result) = self.encrypt_and_get_next_chain_key(plaintext);
+        self.chain_key_send = new_chain_key;
+        self.message_number_send += 1;
         result
     }
 
-    fn try_encrypt(&mut self, plaintext : &T::PlainText) -> (AxolotlMessage<T>, T::Mac) {
+    fn encrypt_and_get_next_chain_key(&self, plaintext : &T::PlainText) -> (T::ChainKey, (AxolotlMessage<T>, T::Mac)) {
         let (new_chain_key, message_key) = T::derive_next_chain_and_message_key(&self.chain_key_send);
         let ciphertext = T::encrypt_message(&message_key, plaintext);
 
@@ -160,10 +160,8 @@ impl <T:Axolotl> AxolotlState<T> {
             ciphertext : ciphertext
         };
         let mac = T::authenticate_message(&message, &message_key, &self.identity_key_remote, &self.identity_key_local);
-        self.chain_key_send = new_chain_key;
-        self.message_number_send += 1;
 
-        (message,mac)
+        (new_chain_key,(message,mac))
     }
     
     pub fn decrypt(&mut self, message : &AxolotlMessage<T>, mac : T::Mac) -> Option<T::PlainText> {
