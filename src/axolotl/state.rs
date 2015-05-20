@@ -21,30 +21,6 @@ struct ReceiveChain<T> where T:Axolotl {
     message_keys : Vec<(u32,T::MessageKey)>,
 }
 
-impl <T:Axolotl> Clone for AxolotlState<T> {
-    fn clone(&self) -> Self {
-        AxolotlState {
-            root_key : self.root_key.clone(),
-            identity_key_local : self.identity_key_local.clone(),
-            identity_key_remote : self.identity_key_remote.clone(),
-            message_number_send : self.message_number_send,
-            chain_key_send : self.chain_key_send.clone(),
-            ratchet_key_send : Clone::clone(&self.ratchet_key_send),
-            receive_chains : self.receive_chains.clone(),
-        }
-    }
-}
-
-impl <T:Axolotl> Clone for ReceiveChain<T> {
-    fn clone(&self) -> Self {
-        ReceiveChain {
-            chain_key : self.chain_key.clone(),
-            chain_key_index : self.chain_key_index,
-            ratchet_key : self.ratchet_key.clone(),
-            message_keys : self.message_keys.clone(),
-        }
-    }
-}
 
 
 pub fn init_as_alice<T>(
@@ -199,31 +175,37 @@ impl <T:Axolotl> AxolotlState<T> {
                 receive_chain.try_decrypt(message, mac, &self.identity_key_local, &self.identity_key_remote)
             }
             None => {
-                let ratchet_key_shared = <T::RatchetKey as DH>::shared(&self.ratchet_key_send.key, &message.ratchet_key);
-                let (receiver_root_key, receiver_chain_key) = T::derive_next_root_key_and_chain_key(self.root_key.clone(), &ratchet_key_shared);
-                let new_ratchet_key_send = T::generate_ratchet_key_pair();
-                let new_ratchet_key_shared = <T::RatchetKey as DH>::shared(&new_ratchet_key_send.key, &message.ratchet_key);
-                let (root_key, chain_key_send) = T::derive_next_root_key_and_chain_key(receiver_root_key, &new_ratchet_key_shared);
-        
-                let mut new_receive_chain = ReceiveChain {
-                    chain_key : receiver_chain_key,
-                    chain_key_index : 0,
-                    ratchet_key : message.ratchet_key.clone(),
-                    message_keys : Vec::new(),
-                };
-
-                let truncate_to = T::skipped_chain_limit();
-                new_receive_chain.try_decrypt(message, mac, &self.identity_key_local, &self.identity_key_remote)
-                    .map(|plaintext|{
-                        self.receive_chains.insert(0, new_receive_chain);
-                        self.receive_chains.truncate(truncate_to);
-                        self.message_number_send = 0;
-                        self.root_key = root_key;
-                        self.chain_key_send = chain_key_send;
-                        self.ratchet_key_send = new_ratchet_key_send;
-                        plaintext
-                    })
+                self.try_decrypt_with_new_chain(message, mac)
             }
+                
         }
+    }
+
+    fn try_decrypt_with_new_chain(&mut self, message : &AxolotlMessage<T>, mac : T::Mac) -> Option<T::PlainText> {
+        let ratchet_key_shared = <T::RatchetKey as DH>::shared(&self.ratchet_key_send.key, &message.ratchet_key);
+        let (receiver_root_key, receiver_chain_key) = T::derive_next_root_key_and_chain_key(self.root_key.clone(), &ratchet_key_shared);
+        let new_ratchet_key_send = T::generate_ratchet_key_pair();
+        let new_ratchet_key_shared = <T::RatchetKey as DH>::shared(&new_ratchet_key_send.key, &message.ratchet_key);
+        let (root_key, chain_key_send) = T::derive_next_root_key_and_chain_key(receiver_root_key, &new_ratchet_key_shared);
+        let truncate_to = T::skipped_chain_limit();
+
+        let mut new_receive_chain = ReceiveChain {
+            chain_key : receiver_chain_key,
+            chain_key_index : 0,
+            ratchet_key : message.ratchet_key.clone(),
+            message_keys : Vec::new(),
+        };
+
+        new_receive_chain
+            .try_decrypt(message, mac, &self.identity_key_local, &self.identity_key_remote)
+            .map(|plaintext| {
+                self.receive_chains.insert(0, new_receive_chain);
+                self.receive_chains.truncate(truncate_to);
+                self.message_number_send = 0;
+                self.root_key = root_key;
+                self.chain_key_send = chain_key_send;
+                self.ratchet_key_send = new_ratchet_key_send;
+                plaintext
+            })
     }
 }
