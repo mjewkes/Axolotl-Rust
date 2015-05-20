@@ -1,8 +1,5 @@
-extern crate rand;
-extern crate raxolotl;
-
-use self::rand::*;
-use self::raxolotl::axolotl::*;
+use rand::*;
+use raxolotl::axolotl::*;
 
 pub struct DHKey;
 
@@ -79,7 +76,7 @@ impl Axolotl for Substitution {
 
     fn encrypt_message(
         key : &u64,
-        plaintext : &Vec<u8>) 
+        plaintext : &Vec<u8>)
     -> Vec<u8> {
         let mut rng = get_rng(*key);
         plaintext
@@ -91,7 +88,7 @@ impl Axolotl for Substitution {
 
     fn decrypt_message(
         key : &u64,
-        ciphertext : &Vec<u8>) 
+        ciphertext : &Vec<u8>)
     -> Option<Vec<u8>> {
         let mut rng = get_rng(*key);
         let plaintext = ciphertext
@@ -102,10 +99,6 @@ impl Axolotl for Substitution {
     }
 
     fn authenticate_message(_ : &AxolotlMessage<Substitution>, _ : &u64, _ : &u64, _ : &u64) {
-    }
-
-    fn ratchet_keys_are_equal(a : &u64, b : &u64) -> bool {
-        *a == *b
     }
 
     fn generate_ratchet_key_pair() -> DHKeyPair<DHKey> {

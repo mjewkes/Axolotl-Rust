@@ -1,6 +1,6 @@
 pub trait DH {
     type Private : Clone;
-    type Public : Clone;
+    type Public : Clone + PartialEq;
     type Shared;
 
     fn public(key : &Self::Private) -> Self::Public;

@@ -1,5 +1,4 @@
-use super::axolotl::{Axolotl};
-use super::dh::{DHPublic};
+use axolotl::{Axolotl, DHPublic};
 
 pub struct AxolotlMessage<T> where T:Axolotl {
     pub message_number : u32,

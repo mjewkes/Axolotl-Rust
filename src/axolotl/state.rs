@@ -1,6 +1,4 @@
-use super::axolotl::{Axolotl};
-use super::dh::{DH,DHExchangedPair,DHKeyPair,DHPublic};
-use super::message::{AxolotlMessage};
+use axolotl::{Axolotl, AxolotlMessage, DH, DHExchangedPair, DHKeyPair, DHPublic};
 
 pub struct AxolotlState<T> where T:Axolotl {
     root_key : T::RootKey,
@@ -48,10 +46,10 @@ impl <T:Axolotl> Clone for ReceiveChain<T> {
 
 
 pub fn init_as_alice<T>(
-    identity_keys : &DHExchangedPair<T::IdentityKey>, 
-    handshake_keys : &DHExchangedPair<T::IdentityKey>, 
-    initial_ratchet_key : &DHPublic<T::RatchetKey>) 
--> AxolotlState<T> 
+    identity_keys : &DHExchangedPair<T::IdentityKey>,
+    handshake_keys : &DHExchangedPair<T::IdentityKey>,
+    initial_ratchet_key : &DHPublic<T::RatchetKey>)
+-> AxolotlState<T>
     where T:Axolotl {
         let ab0 = <T::IdentityKey as DH>::shared(&identity_keys.mine, &handshake_keys.theirs);
         let a0b = <T::IdentityKey as DH>::shared(&handshake_keys.mine, &identity_keys.theirs);
@@ -78,10 +76,10 @@ pub fn init_as_alice<T>(
 }
 
 pub fn init_as_bob<T>(
-    identity_keys : &DHExchangedPair<T::IdentityKey>, 
-    handshake_keys : &DHExchangedPair<T::IdentityKey>, 
-    initial_ratchet_key : DHKeyPair<T::RatchetKey>) 
--> AxolotlState<T> 
+    identity_keys : &DHExchangedPair<T::IdentityKey>,
+    handshake_keys : &DHExchangedPair<T::IdentityKey>,
+    initial_ratchet_key : DHKeyPair<T::RatchetKey>)
+-> AxolotlState<T>
     where T:Axolotl {
         let ab0 = <T::IdentityKey as DH>::shared(&handshake_keys.mine, &identity_keys.theirs);
         let a0b = <T::IdentityKey as DH>::shared(&identity_keys.mine, &handshake_keys.theirs);
@@ -130,16 +128,9 @@ impl <T:Axolotl> ReceiveChain<T> {
         return Some(self.message_keys.pop().unwrap().1);
     }
 }
-impl <T:Axolotl> AxolotlState<T> {
 
+impl <T: Axolotl> AxolotlState<T> {
     pub fn encrypt(&mut self, plaintext : &T::PlainText) -> (AxolotlMessage<T>, T::Mac) {
-        let mut self_clone = Clone::clone(self);
-        let result = self_clone.try_encrypt(plaintext);
-        *self = self_clone;
-        result
-    }
-
-    fn try_encrypt(&mut self, plaintext : &T::PlainText) -> (AxolotlMessage<T>, T::Mac) {
         let (new_chain_key, message_key) = T::derive_next_chain_and_message_key(&self.chain_key_send);
         let ciphertext = T::encrypt_message(&message_key, plaintext);
 
@@ -152,64 +143,61 @@ impl <T:Axolotl> AxolotlState<T> {
         self.chain_key_send = new_chain_key;
         self.message_number_send += 1;
 
-        (message,mac)
+        (message, mac)
     }
-    
+
     pub fn decrypt(&mut self, message : &AxolotlMessage<T>, mac : T::Mac) -> Option<T::PlainText> {
         let mut self_clone = Clone::clone(self);
         let result = self_clone.try_decrypt(message, mac);
-        
+
         if let Some(_) = result {
             *self = self_clone
         }
 
         result
     }
+
     fn try_decrypt(&mut self, message : &AxolotlMessage<T>, mac : T::Mac) -> Option<T::PlainText> {
-        let message_key_or_none;
-        {
+        let message_key = {
             let receive_chain = self.get_or_create_receive_chain(&message.ratchet_key);
-            message_key_or_none = receive_chain.get_or_create_message_key(message.message_number);
-        }
+            receive_chain.get_or_create_message_key(message.message_number)
+        };
 
-        if let None = message_key_or_none  {
-            return None;
-        }
-        let message_key = message_key_or_none.unwrap();
-
-        let expected_mac = T::authenticate_message(message, &message_key, &self.identity_key_local, &self.identity_key_remote);
-        if expected_mac == mac {
-            T::decrypt_message(&message_key, &message.ciphertext)
-        }
-        else {
-            None
-        }
+        message_key.and_then(|message_key| {
+            let expected_mac = T::authenticate_message(message,
+                                                       &message_key,
+                                                       &self.identity_key_local,
+                                                       &self.identity_key_remote);
+            if expected_mac == mac {
+                T::decrypt_message(&message_key, &message.ciphertext)
+            } else {
+                None
+            }
+        })
     }
 
     fn get_or_create_receive_chain(&mut self, ratchet_key_theirs : &<T::RatchetKey as DH>::Public) -> &mut ReceiveChain<T> {
         //TODO: comment on why this is, for loop early return breaks borrowing
-        let receive_chain_position =  self.receive_chains.iter().position(
-            | &ReceiveChain{ref ratchet_key, ..} | T::ratchet_keys_are_equal(ratchet_key, &ratchet_key_theirs)
-            );
+        let receive_chain_position = self.receive_chains
+                                         .iter()
+                                         .position(|c| c.ratchet_key == *ratchet_key_theirs);
 
         match receive_chain_position {
-            Some(pos) => {
-                &mut self.receive_chains[pos]
-            }
+            Some(pos) => &mut self.receive_chains[pos],
             None => {
                 let ratchet_key_shared = <T::RatchetKey as DH>::shared(&self.ratchet_key_send.key, &ratchet_key_theirs);
                 let (receiver_root_key, receiver_chain_key) = T::derive_next_root_key_and_chain_key(self.root_key.clone(), &ratchet_key_shared);
                 let new_ratchet_key_send = T::generate_ratchet_key_pair();
                 let new_ratchet_key_shared = <T::RatchetKey as DH>::shared(&new_ratchet_key_send.key, &ratchet_key_theirs);
                 let (root_key, chain_key_send) = T::derive_next_root_key_and_chain_key(receiver_root_key, &new_ratchet_key_shared);
-        
+
                 let new_receive_chain = ReceiveChain {
                     chain_key : receiver_chain_key,
                     chain_key_index : 0,
                     ratchet_key : ratchet_key_theirs.clone(),
                     message_keys : Vec::new(),
                 };
-        
+
                 let truncate_to = T::skipped_chain_limit();
 
                 self.receive_chains.insert(0, new_receive_chain);
