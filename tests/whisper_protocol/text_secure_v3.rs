@@ -15,7 +15,6 @@ macro_rules! to_array(
     });
 );
 
-const WHOLE_BUNCH   : u32   = !0 as u32;  // Compiler doesn't like u32::MAX interim fix
 
 const KEY_LEN_CHAIN : usize = 32;
 const KEY_LEN_ROOT  : usize = 32;
@@ -182,12 +181,12 @@ impl Axolotl for TextSecureV3{
         curve25519::derive_shared_key( mine,theirs)
     }
 
-    fn future_message_limit(&self) -> u32{
+    fn future_message_limit(&self) -> usize{
         2000
     }
-    fn chain_message_limit(&self) -> u32
+    fn chain_message_limit(&self) -> usize
     {
-        WHOLE_BUNCH
+        usize::max_value()
     }
 
     fn skipped_chain_limit(&self) -> usize{

@@ -69,9 +69,9 @@ pub trait Axolotl {
 
     fn derive_public_key(&self, key : &Self::PrivateKey) -> Self::PublicKey;
 
-    fn future_message_limit(&self) -> u32;
+    fn future_message_limit(&self) -> usize;
 
-    fn chain_message_limit(&self) -> u32;
+    fn chain_message_limit(&self) -> usize;
 
     fn skipped_chain_limit(&self) -> usize;
 }

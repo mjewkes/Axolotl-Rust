@@ -110,11 +110,11 @@ impl Axolotl for Substitution {
     }
 
 
-    fn future_message_limit(&self) -> u32 {
+    fn future_message_limit(&self) -> usize {
         1024
     }
 
-    fn chain_message_limit(&self) -> u32 {
+    fn chain_message_limit(&self) -> usize {
         1024
     }
 
@@ -124,28 +124,28 @@ impl Axolotl for Substitution {
     }
 }
 
-pub fn init_alice_and_bob(axolotl : &Substitution) -> (AxolotlState<Substitution>, AxolotlState<Substitution>) {
-    let alice_identity = axolotl.generate_ratchet_key_pair();
-    let alice_handshake = axolotl.generate_ratchet_key_pair();
-    let bob_identity = axolotl.generate_ratchet_key_pair();
-    let bob_handshake = axolotl.generate_ratchet_key_pair();
-    let initial_ratchet = axolotl.generate_ratchet_key_pair();
+pub fn init_alice_and_bob(axolotl_impl : &Substitution) -> (AxolotlState<Substitution>, AxolotlState<Substitution>) {
+    let alice_identity = axolotl_impl.generate_ratchet_key_pair();
+    let alice_handshake = axolotl_impl.generate_ratchet_key_pair();
+    let bob_identity = axolotl_impl.generate_ratchet_key_pair();
+    let bob_handshake = axolotl_impl.generate_ratchet_key_pair();
+    let initial_ratchet = axolotl_impl.generate_ratchet_key_pair();
 
     let alice_exchanged_identity = ExchangedPair { mine : alice_identity.key, theirs : bob_identity.public };
     let alice_exchanged_handshake = ExchangedPair { mine : alice_handshake.key, theirs : bob_handshake.public };
     let bob_exchanged_identity = ExchangedPair { mine : bob_identity.key, theirs : alice_identity.public };
     let bob_exchanged_handshake = ExchangedPair { mine : bob_handshake.key, theirs : alice_handshake.public };
 
-    let alice = init_as_alice::<Substitution>(axolotl, &alice_exchanged_identity, &alice_exchanged_handshake, &initial_ratchet.public);
-    let bob = init_as_bob::<Substitution>(axolotl, &bob_exchanged_identity, &bob_exchanged_handshake, initial_ratchet);
+    let alice = init_as_alice::<Substitution>(axolotl_impl, &alice_exchanged_identity, &alice_exchanged_handshake, &initial_ratchet.public);
+    let bob = init_as_bob::<Substitution>(axolotl_impl, &bob_exchanged_identity, &bob_exchanged_handshake, initial_ratchet);
 
     (alice,bob)
 }
 
-pub fn check_send(axolotl : &Substitution, sender : &mut AxolotlState<Substitution>, receiver : &mut AxolotlState<Substitution>, message : String) -> AxolotlMessage<Substitution> {
+pub fn check_send(axolotl_impl : &Substitution, sender : &mut AxolotlState<Substitution>, receiver : &mut AxolotlState<Substitution>, message : String) -> AxolotlMessage<Substitution> {
     let m = message.into_bytes();
-    let encrypted = sender.encrypt(axolotl, &m);
-    let decrypted = receiver.decrypt(axolotl, &encrypted.0, encrypted.1).unwrap();
+    let encrypted = sender.encrypt(axolotl_impl, &m);
+    let decrypted = receiver.decrypt(axolotl_impl, &encrypted.0, encrypted.1).unwrap();
     assert!(m[..] == decrypted[..]);
     assert!(m[..] != encrypted.0.ciphertext[..]);
     encrypted.0

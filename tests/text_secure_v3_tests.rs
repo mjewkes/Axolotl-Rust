@@ -6,19 +6,19 @@ use whisper_protocol::text_secure_v3::{ExchangedPair,KeyPair,PlainText,TextSecur
 
 #[test]
 fn dynamic_roundtrip_echo(){
-    let ref axolotl = TextSecureV3;
-    let (mut alice, mut bob ) = init_dynamic_axolotl_states(axolotl);
+    let ref axolotl_impl = TextSecureV3;
+    let (mut alice, mut bob ) = init_dynamic_axolotl_states(axolotl_impl);
 
     let msg = PlainText::from_vec("hello goat!".to_string().into_bytes());
 
     for __ in 0..10 {
-        let (wm, mac) = alice.encrypt(axolotl, &msg);
-        let plaintext = bob.decrypt(axolotl, &wm,mac).unwrap();
+        let (wm, mac) = alice.encrypt(axolotl_impl, &msg);
+        let plaintext = bob.decrypt(axolotl_impl, &wm,mac).unwrap();
 
         assert_eq!(msg.0 , plaintext.0);
 
-        let (wmb, macb) = bob.encrypt(axolotl, &plaintext);
-        let reply = alice.decrypt(axolotl, &wmb,macb).unwrap();
+        let (wmb, macb) = bob.encrypt(axolotl_impl, &plaintext);
+        let reply = alice.decrypt(axolotl_impl, &wmb,macb).unwrap();
 
         assert_eq!(msg.0,reply.0);
     }
@@ -29,7 +29,7 @@ fn dynamic_roundtrip_echo(){
 
 #[test]
 fn android_session_kat () {
-    let ref axolotl = TextSecureV3;
+    let ref axolotl_impl = TextSecureV3;
     let alice_identity_private_key: [u8;32]  =       [0x58, 0x20, 0xD9, 0x2B, 0xBF, 0x3E, 0x74, 0x80, 0x68, 0x01, 
                                                       0x94, 0x90, 0xC3, 0xAA, 0x94, 0x50, 0x21, 0xFA, 0xA6, 0xD2, 
                                                       0x43, 0xE4, 0x86, 0x49, 0xF6, 0x6B, 0xD6, 0xA4, 0x45, 0x99, 
@@ -109,7 +109,7 @@ fn android_session_kat () {
 
 
     let mut alice = axolotl::init_as_alice_with_explicit_ratchet_keypair::<TextSecureV3>(
-        axolotl,
+        axolotl_impl,
         &alice_exchanged_identity, 
         &alice_exchanged_handshake, 
         alice_sending_ratchet_keypair, 
@@ -117,7 +117,7 @@ fn android_session_kat () {
     );
 
     let mut bob = axolotl::init_as_bob::<TextSecureV3>(
-        axolotl,
+        axolotl_impl,
         &bob_exchanged_identity, 
         &bob_exchanged_handshake, 
         bob_ratchet_keypair
@@ -128,25 +128,25 @@ fn android_session_kat () {
     let a_plain = PlainText::from_vec(alice_plaintext.to_vec());
 
 
-    let (alice_cipher_msg,ab_mac) = alice.encrypt(axolotl, &a_plain);
+    let (alice_cipher_msg,ab_mac) = alice.encrypt(axolotl_impl, &a_plain);
     assert_eq!(&alice_cipher_msg.ciphertext.cipher_text[..], &alice_cipher_text[..]);
 
    
-    let bob_plain = bob.decrypt(axolotl, &alice_cipher_msg,ab_mac).unwrap();
+    let bob_plain = bob.decrypt(axolotl_impl, &alice_cipher_msg,ab_mac).unwrap();
     assert_eq!(bob_plain.0.to_vec(),&alice_plaintext[..]);
    
     for i in 0 .. 100{
         let message = [i;78];
 
-        let (c,m) = alice.encrypt(axolotl, &PlainText::from_vec(message.to_vec()));      
-        assert_eq!(&message[..], &bob.decrypt(axolotl, &c,m).unwrap().0.to_vec()[..] );
+        let (c,m) = alice.encrypt(axolotl_impl, &PlainText::from_vec(message.to_vec()));      
+        assert_eq!(&message[..], &bob.decrypt(axolotl_impl, &c,m).unwrap().0.to_vec()[..] );
     }
 
     for i in 0 .. 100{
         let message = [i;1802];
 
-        let (c,m) = bob.encrypt(axolotl, &PlainText::from_vec(message.to_vec()));
-        assert_eq!(&message[..], &alice.decrypt(axolotl, &c,m).unwrap().0.to_vec()[..] );
+        let (c,m) = bob.encrypt(axolotl_impl, &PlainText::from_vec(message.to_vec()));
+        assert_eq!(&message[..], &alice.decrypt(axolotl_impl, &c,m).unwrap().0.to_vec()[..] );
     }
 }
 
@@ -163,7 +163,7 @@ fn dhkey_pair_from_bytes(private : [u8;32], public: [u8;32]) -> KeyPair<TextSecu
     KeyPair{ key :curve25519::PrivateKey::from_bytes(private), public : curve25519::PublicKey::from_bytes(public)}
 } 
 
-fn init_dynamic_axolotl_states(axolotl : &TextSecureV3) -> (axolotl::AxolotlState<TextSecureV3>, axolotl::AxolotlState<TextSecureV3>) {
+fn init_dynamic_axolotl_states(axolotl_impl : &TextSecureV3) -> (axolotl::AxolotlState<TextSecureV3>, axolotl::AxolotlState<TextSecureV3>) {
 
     let alice_identity = dhkey_pair();
     let alice_handshake = dhkey_pair();
@@ -176,7 +176,7 @@ fn init_dynamic_axolotl_states(axolotl : &TextSecureV3) -> (axolotl::AxolotlStat
     let bob_exchanged_identity = ExchangedPair { mine : bob_identity.key, theirs : alice_identity.public };
     let bob_exchanged_handshake = ExchangedPair { mine : bob_handshake.key, theirs : alice_handshake.public };
 
-    let alice = axolotl::init_as_alice::<TextSecureV3>(axolotl, &alice_exchanged_identity, &alice_exchanged_handshake, &initial_ratchet.public);
-    let bob = axolotl::init_as_bob::<TextSecureV3>(axolotl, &bob_exchanged_identity, &bob_exchanged_handshake, initial_ratchet);
+    let alice = axolotl::init_as_alice::<TextSecureV3>(axolotl_impl, &alice_exchanged_identity, &alice_exchanged_handshake, &initial_ratchet.public);
+    let bob = axolotl::init_as_bob::<TextSecureV3>(axolotl_impl, &bob_exchanged_identity, &bob_exchanged_handshake, initial_ratchet);
     (alice,bob)
 }
