@@ -1,24 +1,24 @@
 mod whisper_protocol;
 
-use whisper_protocol::{axolotl,text_secure_v3};
+use whisper_protocol::{axolotl};
 use whisper_protocol::crypto_wrappers::curve25519;
-use whisper_protocol::text_secure_v3::{DHExchangedPair,DHKeyPair,IdentityKey,PlainText,RatchetKey,TextSecureV3};
+use whisper_protocol::text_secure_v3::{ExchangedPair,KeyPair,PlainText,TextSecureV3};
 
 #[test]
 fn dynamic_roundtrip_echo(){
-
-    let (mut alice, mut bob ) = init_dynamic_axolotl_states();
+    let ref axolotl_impl = TextSecureV3;
+    let (mut alice, mut bob ) = init_dynamic_axolotl_states(axolotl_impl);
 
     let msg = PlainText::from_vec("hello goat!".to_string().into_bytes());
 
     for __ in 0..10 {
-        let (wm, mac) = alice.encrypt(&msg);
-        let plaintext = bob.decrypt(&wm,mac).unwrap();
+        let (wm, mac) = alice.encrypt(axolotl_impl, &msg);
+        let plaintext = bob.decrypt(axolotl_impl, &wm,mac).unwrap();
 
         assert_eq!(msg.0 , plaintext.0);
 
-        let (wmb, macb) = bob.encrypt(&plaintext);
-        let reply = alice.decrypt(&wmb,macb).unwrap();
+        let (wmb, macb) = bob.encrypt(axolotl_impl, &plaintext);
+        let reply = alice.decrypt(axolotl_impl, &wmb,macb).unwrap();
 
         assert_eq!(msg.0,reply.0);
     }
@@ -29,6 +29,7 @@ fn dynamic_roundtrip_echo(){
 
 #[test]
 fn android_session_kat () {
+    let ref axolotl_impl = TextSecureV3;
     let alice_identity_private_key: [u8;32]  =       [0x58, 0x20, 0xD9, 0x2B, 0xBF, 0x3E, 0x74, 0x80, 0x68, 0x01, 
                                                       0x94, 0x90, 0xC3, 0xAA, 0x94, 0x50, 0x21, 0xFA, 0xA6, 0xD2, 
                                                       0x43, 0xE4, 0x86, 0x49, 0xF6, 0x6B, 0xD6, 0xA4, 0x45, 0x99, 
@@ -95,19 +96,20 @@ fn android_session_kat () {
     let alice_base_keypair      = dhkey_pair_from_bytes(alice_base_private_key,alice_base_public_key);
     let bob_base_keypair        = dhkey_pair_from_bytes(bob_base_private_key,bob_base_public_key);
 
-    let alice_sending_ratchet_keypair : DHKeyPair<RatchetKey> = DHKeyPair{ 
+    let alice_sending_ratchet_keypair : KeyPair<TextSecureV3> = KeyPair{ 
                                             key : curve25519::PrivateKey::from_bytes(alice_sending_ratchet_private), 
                                             public : curve25519::PublicKey::from_bytes(alice_sending_ratchet_public)
                                         }; 
-    let bob_ratchet_keypair = text_secure_v3::ident_to_ratchet(bob_base_keypair.clone());
+    let bob_ratchet_keypair = bob_base_keypair.clone();
     
-    let alice_exchanged_identity : DHExchangedPair<IdentityKey> = DHExchangedPair { mine : alice_identity_keypair.key, theirs : bob_identity_keypair.public };
-    let alice_exchanged_handshake : DHExchangedPair<IdentityKey> = DHExchangedPair { mine : alice_base_keypair.key, theirs : bob_base_keypair.public };
-    let bob_exchanged_identity : DHExchangedPair<IdentityKey>= DHExchangedPair { mine : bob_identity_keypair.key, theirs : alice_identity_keypair.public };
-    let bob_exchanged_handshake :DHExchangedPair<IdentityKey>= DHExchangedPair { mine : bob_base_keypair.key, theirs : alice_base_keypair.public };
+    let alice_exchanged_identity : ExchangedPair<TextSecureV3> = ExchangedPair { mine : alice_identity_keypair.key, theirs : bob_identity_keypair.public };
+    let alice_exchanged_handshake : ExchangedPair<TextSecureV3> = ExchangedPair { mine : alice_base_keypair.key, theirs : bob_base_keypair.public };
+    let bob_exchanged_identity : ExchangedPair<TextSecureV3>= ExchangedPair { mine : bob_identity_keypair.key, theirs : alice_identity_keypair.public };
+    let bob_exchanged_handshake :ExchangedPair<TextSecureV3>= ExchangedPair { mine : bob_base_keypair.key, theirs : alice_base_keypair.public };
 
 
     let mut alice = axolotl::init_as_alice_with_explicit_ratchet_keypair::<TextSecureV3>(
+        axolotl_impl,
         &alice_exchanged_identity, 
         &alice_exchanged_handshake, 
         alice_sending_ratchet_keypair, 
@@ -115,6 +117,7 @@ fn android_session_kat () {
     );
 
     let mut bob = axolotl::init_as_bob::<TextSecureV3>(
+        axolotl_impl,
         &bob_exchanged_identity, 
         &bob_exchanged_handshake, 
         bob_ratchet_keypair
@@ -125,55 +128,55 @@ fn android_session_kat () {
     let a_plain = PlainText::from_vec(alice_plaintext.to_vec());
 
 
-    let (alice_cipher_msg,ab_mac) = alice.encrypt(&a_plain);
+    let (alice_cipher_msg,ab_mac) = alice.encrypt(axolotl_impl, &a_plain);
     assert_eq!(&alice_cipher_msg.ciphertext.cipher_text[..], &alice_cipher_text[..]);
 
    
-    let bob_plain = bob.decrypt(&alice_cipher_msg,ab_mac).unwrap();
+    let bob_plain = bob.decrypt(axolotl_impl, &alice_cipher_msg,ab_mac).unwrap();
     assert_eq!(bob_plain.0.to_vec(),&alice_plaintext[..]);
    
     for i in 0 .. 100{
         let message = [i;78];
 
-        let (c,m) = alice.encrypt(&PlainText::from_vec(message.to_vec()));      
-        assert_eq!(&message[..], &bob.decrypt(&c,m).unwrap().0.to_vec()[..] );
+        let (c,m) = alice.encrypt(axolotl_impl, &PlainText::from_vec(message.to_vec()));      
+        assert_eq!(&message[..], &bob.decrypt(axolotl_impl, &c,m).unwrap().0.to_vec()[..] );
     }
 
     for i in 0 .. 100{
         let message = [i;1802];
 
-        let (c,m) = bob.encrypt(&PlainText::from_vec(message.to_vec()));
-        assert_eq!(&message[..], &alice.decrypt(&c,m).unwrap().0.to_vec()[..] );
+        let (c,m) = bob.encrypt(axolotl_impl, &PlainText::from_vec(message.to_vec()));
+        assert_eq!(&message[..], &alice.decrypt(axolotl_impl, &c,m).unwrap().0.to_vec()[..] );
     }
 }
 
 // ------ Utitlities ------
-fn dhkey_pair() -> DHKeyPair<IdentityKey> {
+fn dhkey_pair() -> KeyPair<TextSecureV3> {
     let priv_key  = curve25519::generate_private_key();
     let pub_key = curve25519::derive_public_key(&priv_key);
 
-    DHKeyPair{ key :priv_key, public : pub_key}
+    KeyPair{ key :priv_key, public : pub_key}
 } 
 
-fn dhkey_pair_from_bytes(private : [u8;32], public: [u8;32]) -> DHKeyPair<IdentityKey> {
+fn dhkey_pair_from_bytes(private : [u8;32], public: [u8;32]) -> KeyPair<TextSecureV3> {
 
-    DHKeyPair{ key :curve25519::PrivateKey::from_bytes(private), public : curve25519::PublicKey::from_bytes(public)}
+    KeyPair{ key :curve25519::PrivateKey::from_bytes(private), public : curve25519::PublicKey::from_bytes(public)}
 } 
 
-fn init_dynamic_axolotl_states() -> (axolotl::AxolotlState<TextSecureV3>, axolotl::AxolotlState<TextSecureV3>) {
+fn init_dynamic_axolotl_states(axolotl_impl : &TextSecureV3) -> (axolotl::AxolotlState<TextSecureV3>, axolotl::AxolotlState<TextSecureV3>) {
 
     let alice_identity = dhkey_pair();
     let alice_handshake = dhkey_pair();
     let bob_identity = dhkey_pair();
     let bob_handshake = dhkey_pair();
-    let initial_ratchet = text_secure_v3::ident_to_ratchet(dhkey_pair());
+    let initial_ratchet = dhkey_pair();
 
-    let alice_exchanged_identity = DHExchangedPair { mine : alice_identity.key, theirs : bob_identity.public };
-    let alice_exchanged_handshake = DHExchangedPair { mine : alice_handshake.key, theirs : bob_handshake.public };
-    let bob_exchanged_identity = DHExchangedPair { mine : bob_identity.key, theirs : alice_identity.public };
-    let bob_exchanged_handshake = DHExchangedPair { mine : bob_handshake.key, theirs : alice_handshake.public };
+    let alice_exchanged_identity = ExchangedPair { mine : alice_identity.key, theirs : bob_identity.public };
+    let alice_exchanged_handshake = ExchangedPair { mine : alice_handshake.key, theirs : bob_handshake.public };
+    let bob_exchanged_identity = ExchangedPair { mine : bob_identity.key, theirs : alice_identity.public };
+    let bob_exchanged_handshake = ExchangedPair { mine : bob_handshake.key, theirs : alice_handshake.public };
 
-    let alice = axolotl::init_as_alice::<TextSecureV3>(&alice_exchanged_identity, &alice_exchanged_handshake, &initial_ratchet.public);
-    let bob = axolotl::init_as_bob::<TextSecureV3>(&bob_exchanged_identity, &bob_exchanged_handshake, initial_ratchet);
+    let alice = axolotl::init_as_alice::<TextSecureV3>(axolotl_impl, &alice_exchanged_identity, &alice_exchanged_handshake, &initial_ratchet.public);
+    let bob = axolotl::init_as_bob::<TextSecureV3>(axolotl_impl, &bob_exchanged_identity, &bob_exchanged_handshake, initial_ratchet);
     (alice,bob)
 }

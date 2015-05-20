@@ -1,5 +1,5 @@
 extern crate raxolotl;
-pub use self::raxolotl::axolotl::{Axolotl,AxolotlMessage,DH,DHExchangedPair,DHKeyPair,DHPublic,DHShared};
+pub use self::raxolotl::axolotl::{Axolotl,AxolotlMessage,ExchangedPair,KeyPair};
 
 use whisper_protocol::crypto_wrappers::{aes_cbc,curve25519,hkdf,hmac};
 
@@ -15,7 +15,6 @@ macro_rules! to_array(
     });
 );
 
-const WHOLE_BUNCH   : u32   = !0 as u32;  // Compiler doesn't like u32::MAX interim fix
 
 const KEY_LEN_CHAIN : usize = 32;
 const KEY_LEN_ROOT  : usize = 32;
@@ -29,39 +28,7 @@ const SEED_CHAIN_KEY: [u8;1] = [2];
 
 pub struct TextSecureV3;
 
-pub struct IdentityKey;
 
-impl DH for IdentityKey {
-    type Private = curve25519::PrivateKey;
-    type Public  = curve25519::PublicKey;
-    type Shared  = curve25519::SharedKey;
-
-    fn public(key : &Self::Private) -> Self::Public{
-        curve25519::derive_public_key(key)
-    }
-    fn shared(mine : &Self::Private, theirs : &Self::Public) -> Self::Shared{
-        curve25519::derive_shared_key( mine,theirs)
-    }
-}
-
-pub fn ident_to_ratchet(ident : DHKeyPair<IdentityKey> ) -> DHKeyPair<RatchetKey> {
-    DHKeyPair{key: ident.key, public:ident.public}
-} 
-
-pub struct RatchetKey;
-impl DH for RatchetKey {
-    type Private = curve25519::PrivateKey;
-    type Public = curve25519::PublicKey;
-    type Shared = curve25519::SharedKey;
-
-    fn public(key : &Self::Private) -> Self::Public{
-        curve25519::derive_public_key(key)
-    }
-    fn shared(mine : &Self::Private, theirs : &Self::Public) -> Self::Shared{
-        curve25519::derive_shared_key( mine,theirs)
-    }
-
-}
 
 #[derive(Clone)]
 pub struct Rootkey ([u8;32]);
@@ -102,8 +69,9 @@ pub struct CipherTextAndVersion{
 }
 
 impl Axolotl for TextSecureV3{
-    type IdentityKey = IdentityKey;
-    type RatchetKey = RatchetKey;
+    type PrivateKey = curve25519::PrivateKey;
+    type PublicKey  = curve25519::PublicKey;
+    type SharedSecret  = curve25519::SharedKey;
 
     type RootKey = Rootkey;
     type ChainKey = ChainKey;
@@ -116,9 +84,11 @@ impl Axolotl for TextSecureV3{
 
     /// Returns initial Root and Chain keys derived from initial the TripleDH handshake. 
     fn derive_initial_root_key_and_chain_key(
-        local_identity_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>, 
-        local_handshake_remote_identity_dh_secred : &DHShared<Self::IdentityKey>, 
-        local_handshake_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>) -> (Self::RootKey, Self::ChainKey){
+        &self,
+        local_identity_remote_handshake_dh_secret : &Self::SharedSecret, 
+        local_handshake_remote_identity_dh_secred : &Self::SharedSecret, 
+        local_handshake_remote_handshake_dh_secret : &Self::SharedSecret
+    ) -> (Self::RootKey, Self::ChainKey){
 
         let disconuity_bytes = curve25519::SharedKey::from_bytes([0xFF;32]);
         let mut master_key : Vec<u8> = [ &disconuity_bytes, local_identity_remote_handshake_dh_secret,
@@ -134,22 +104,28 @@ impl Axolotl for TextSecureV3{
     }
 
     /// Returns new Root and Chain keys derived from racheting previous keyset.
-    fn derive_next_root_key_and_chain_key(Rootkey( root_bytes ): Self::RootKey, ratchet : &<Self::RatchetKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey){
+    fn derive_next_root_key_and_chain_key(
+        &self, 
+        Rootkey( root_bytes ): Self::RootKey, 
+        ratchet : &Self::SharedSecret
+    ) -> (Self::RootKey, Self::ChainKey) {
         let ikm = ratchet;
         let (rk,ck) = keys_from_kdf(ikm.to_bytes(),"WhisperRatchet".as_bytes(),&root_bytes);
         (Rootkey(rk),ChainKey(ck))
     }
 
     /// Returns derived Message key for given Chain key as well as the next Chain key to be used.
-    fn derive_next_chain_and_message_key(chain_key : &Self::ChainKey) -> (Self::ChainKey, Self::MessageKey){
+    fn derive_next_chain_and_message_key(&self, chain_key : &Self::ChainKey) -> (Self::ChainKey, Self::MessageKey){
         let ikm = chain_key.hmac( &SEED_MSG_KEY ); 
         let msg_key = generate_message_key(&ikm,"WhisperMessageKeys".as_bytes(),&SEED_NULL);
         (chain_key.next(),msg_key)
     }
     
-    fn encrypt_message(message_key : &Self::MessageKey, 
-                      plaintext : &Self::PlainText) 
-                      -> Self::CipherText{
+    fn encrypt_message(
+        &self,
+        message_key : &Self::MessageKey, 
+        plaintext : &Self::PlainText
+    ) -> Self::CipherText{
 
         let PlainText(ref text) = *plaintext;
         let ciphertext = aes_cbc::encrypt_aes256_cbc_mode(text,message_key.cipher_key, message_key.iv);
@@ -160,9 +136,11 @@ impl Axolotl for TextSecureV3{
         }
     }
 
-    fn decrypt_message(message_key : &Self::MessageKey, 
-                      ciphertext : &Self::CipherText) 
-                      -> Option<Self::PlainText>{
+    fn decrypt_message(
+        &self,
+        message_key : &Self::MessageKey, 
+        ciphertext : &Self::CipherText
+    ) -> Option<Self::PlainText>{
         if ciphertext.version != 3 {
             return None;
         }
@@ -172,10 +150,12 @@ impl Axolotl for TextSecureV3{
     }
 
     fn authenticate_message(
+        &self,
         message : &AxolotlMessage<Self>, 
         message_key : &Self::MessageKey, 
-        sender_identity : &DHPublic<Self::IdentityKey>, 
-        receiver_identity : &DHPublic<Self::IdentityKey>) -> Self::Mac{
+        sender_identity : &Self::PublicKey, 
+        receiver_identity : &Self::PublicKey
+    ) -> Self::Mac{
 
         let mut mac_state = hmac::HmacSha256::new(&message_key.mac_key);
         mac_state.input(sender_identity.to_bytes());
@@ -184,25 +164,32 @@ impl Axolotl for TextSecureV3{
         hmac::truncate_mac_result(mac_state.result(), 8)
     }
 
-    fn ratchet_keys_are_equal(key0 : &<Self::RatchetKey as DH>::Public, key1 : &<Self::RatchetKey as DH>::Public) -> bool{
+    fn ratchet_keys_are_equal(&self, key0 : &Self::PublicKey, key1 : &Self::PublicKey) -> bool{
         key0 == key1
     }
-    fn generate_ratchet_key_pair() -> DHKeyPair<Self::RatchetKey>{
+    fn generate_ratchet_key_pair(&self) -> KeyPair<Self>{
         let priv_key  = curve25519::generate_private_key();
         let pub_key = curve25519::derive_public_key(&priv_key);
 
-        DHKeyPair{ key: priv_key, public : pub_key }
+        KeyPair{ key: priv_key, public : pub_key }
     }
 
-    fn future_message_limit() -> u32{
+    fn derive_public_key(&self, key : &Self::PrivateKey) -> Self::PublicKey {
+        curve25519::derive_public_key(key)
+    }
+    fn derive_shared_secret(&self, mine : &Self::PrivateKey, theirs : &Self::PublicKey) -> Self::SharedSecret {
+        curve25519::derive_shared_key( mine,theirs)
+    }
+
+    fn future_message_limit(&self) -> usize{
         2000
     }
-    fn chain_message_limit() -> u32
+    fn chain_message_limit(&self) -> usize
     {
-        WHOLE_BUNCH
+        usize::max_value()
     }
 
-    fn skipped_chain_limit() -> usize{
+    fn skipped_chain_limit(&self) -> usize{
         5
     }
 }
