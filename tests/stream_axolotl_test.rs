@@ -1,3 +1,6 @@
+extern crate rand;
+extern crate raxolotl;
+
 mod toy_stream_cipher;
 use toy_stream_cipher::*;
 
@@ -5,27 +8,27 @@ use toy_stream_cipher::*;
 fn alice_sends_to_bob() {
     let (mut alice, mut bob) = init_alice_and_bob();
     check_send(&mut alice, &mut bob, "hello, bob!".to_string());
-}   
+}
 
 #[test]
 fn bob_sends_to_alice() {
     let (mut alice, mut bob) = init_alice_and_bob();
     check_send(&mut bob, &mut alice, "hello, alice!".to_string());
-}   
+}
 
 #[test]
 fn alice_sends_then_bob_sends() {
     let (mut alice, mut bob) = init_alice_and_bob();
     check_send(&mut alice, &mut bob, "hello, bob!".to_string());
     check_send(&mut bob, &mut alice, "hello, alice!".to_string());
-}   
+}
 
 #[test]
 fn bob_sends_then_alice_sends() {
     let (mut alice, mut bob) = init_alice_and_bob();
     check_send(&mut bob, &mut alice, "hello, alice!".to_string());
     check_send(&mut alice, &mut bob, "hello, bob!".to_string());
-}   
+}
 
 #[test]
 fn alice_sends_many_to_bob() {

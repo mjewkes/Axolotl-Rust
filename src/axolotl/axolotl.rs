@@ -1,7 +1,5 @@
-use std::option::{Option};
-
-use super::dh::{DH,DHKeyPair,DHShared,DHPublic};
-use super::message::{AxolotlMessage};
+use axolotl::{AxolotlMessage, DH, DHKeyPair, DHShared, DHPublic};
+use std::borrow::ToOwned;
 
 pub trait Axolotl {
     type IdentityKey : DH;
@@ -11,52 +9,47 @@ pub trait Axolotl {
     type ChainKey : Clone;
     type MessageKey : Clone;
 
-    type PlainText;
+    type PlainText: ToOwned + ?Sized;
     type CipherText;
 
     type Mac : PartialEq;
 
 
     fn derive_initial_root_key_and_chain_key(
-        local_identity_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>, 
-        local_handshake_remote_identity_dh_secred : &DHShared<Self::IdentityKey>, 
-        local_handshake_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>) 
+        local_identity_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>,
+        local_handshake_remote_identity_dh_secred : &DHShared<Self::IdentityKey>,
+        local_handshake_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>)
     -> (Self::RootKey, Self::ChainKey);
 
     // This is the DH future secrecy ratchet/
     fn derive_next_root_key_and_chain_key(
-        root_key : Self::RootKey, 
-        ratchet : &<Self::RatchetKey as DH>::Shared) 
+        root_key : Self::RootKey,
+        ratchet : &<Self::RatchetKey as DH>::Shared)
     -> (Self::RootKey, Self::ChainKey);
 
     //This is the SCIMP style forward secrecy chain key iteration.
     fn derive_next_chain_and_message_key(
-        chain_key : &Self::ChainKey) 
+        chain_key : &Self::ChainKey)
     -> (Self::ChainKey, Self::MessageKey);
 
-    fn encrypt_message(
+    fn encrypt_message<P: AsRef<Self::PlainText>>(
         message_key : &Self::MessageKey,
-        plaintext : &Self::PlainText) 
+        plaintext : P)
     -> Self::CipherText;
 
     fn decrypt_message(
         message_key : &Self::MessageKey,
-        cyphertext : &Self::CipherText) 
-    -> Option<Self::PlainText>;
+        cyphertext : &Self::CipherText)
+    -> Option<<Self::PlainText as ToOwned>::Owned>;
 
     fn authenticate_message(
-        message : &AxolotlMessage<Self>, 
-        message_key : &Self::MessageKey, 
-        sender_identity : &DHPublic<Self::IdentityKey>, 
+        message : &AxolotlMessage<Self>,
+        message_key : &Self::MessageKey,
+        sender_identity : &DHPublic<Self::IdentityKey>,
         receiver_identity : &DHPublic<Self::IdentityKey>)
     -> Self::Mac;
 
-    fn ratchet_keys_are_equal(
-        key0 : &DHPublic<Self::RatchetKey>, 
-        key1 : &DHPublic<Self::RatchetKey>) 
-    -> bool;
-
-    fn generate_ratchet_key_pair() 
+    fn generate_ratchet_key_pair()
     -> DHKeyPair<Self::RatchetKey>;
 
     fn future_message_limit() -> u32;
