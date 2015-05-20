@@ -1,9 +1,7 @@
-use ::axolotl;
-use ::axolotl::{AxolotlMessage,DH,DHKeyPair,DHPublic,DHShared};
-use ::crypto_wrappers::aes_cbc;
-use ::crypto_wrappers::curve25519;
-use ::crypto_wrappers::hkdf;
-use ::crypto_wrappers::hmac;
+extern crate raxolotl;
+pub use self::raxolotl::axolotl::{Axolotl,AxolotlMessage,DH,DHExchangedPair,DHKeyPair,DHPublic,DHShared};
+
+use whisper_protocol::crypto_wrappers::{aes_cbc,curve25519,hkdf,hmac};
 
 
 #[macro_export]
@@ -33,7 +31,7 @@ pub struct TextSecureV3;
 
 pub struct IdentityKey;
 
-impl axolotl::DH for IdentityKey {
+impl DH for IdentityKey {
     type Private = curve25519::PrivateKey;
     type Public  = curve25519::PublicKey;
     type Shared  = curve25519::SharedKey;
@@ -51,7 +49,7 @@ pub fn ident_to_ratchet(ident : DHKeyPair<IdentityKey> ) -> DHKeyPair<RatchetKey
 } 
 
 pub struct RatchetKey;
-impl axolotl::DH for RatchetKey {
+impl DH for RatchetKey {
     type Private = curve25519::PrivateKey;
     type Public = curve25519::PublicKey;
     type Shared = curve25519::SharedKey;
@@ -83,7 +81,6 @@ impl ChainKey {
         to_array!(hmac_context.result().code()[..],KEY_LEN_CHAIN)
     }
 }
-#[derive(Debug)]
 #[derive(Clone)]
 pub struct MessageKey{
     cipher_key : [u8;32],
@@ -91,7 +88,6 @@ pub struct MessageKey{
     iv : [u8;16],
 }
 
-#[derive(Debug)]
 pub struct PlainText(pub Box<[u8]>);
 
 impl PlainText {
@@ -99,13 +95,13 @@ impl PlainText {
         PlainText(data.into_boxed_slice())
     }
 }
-#[derive(Debug)]
+
 pub struct CipherTextAndVersion{
-    cipher_text : Box<[u8]>,
+    pub cipher_text : Box<[u8]>,
     version : u8,
 }
 
-impl axolotl::Axolotl for TextSecureV3{
+impl Axolotl for TextSecureV3{
     type IdentityKey = IdentityKey;
     type RatchetKey = RatchetKey;
 
@@ -123,8 +119,9 @@ impl axolotl::Axolotl for TextSecureV3{
         local_identity_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>, 
         local_handshake_remote_identity_dh_secred : &DHShared<Self::IdentityKey>, 
         local_handshake_remote_handshake_dh_secret : &DHShared<Self::IdentityKey>) -> (Self::RootKey, Self::ChainKey){
-        
-        let master_key : Vec<u8> = [  local_identity_remote_handshake_dh_secret,
+
+        let disconuity_bytes = curve25519::SharedKey::from_bytes([0xFF;32]);
+        let mut master_key : Vec<u8> = [ &disconuity_bytes, local_identity_remote_handshake_dh_secret,
                             local_handshake_remote_identity_dh_secred,
                             local_handshake_remote_handshake_dh_secret]
                             .iter()
@@ -137,24 +134,16 @@ impl axolotl::Axolotl for TextSecureV3{
     }
 
     /// Returns new Root and Chain keys derived from racheting previous keyset.
-    fn derive_next_root_key_and_chain_key(root_key : Self::RootKey, ratchet : &<Self::RatchetKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey){
-        let Rootkey( root_bytes ) = root_key;
-        let ikm : Vec<u8> = [root_bytes,*ratchet.to_bytes()]
-            .iter()
-            .flat_map(|x| {x})
-            .map(|x|{*x})
-            .collect();
-
-        let (rk,ck) = keys_from_kdf(&ikm,"WhisperRatchet".as_bytes(),&root_bytes);
-
+    fn derive_next_root_key_and_chain_key(Rootkey( root_bytes ): Self::RootKey, ratchet : &<Self::RatchetKey as DH>::Shared) -> (Self::RootKey, Self::ChainKey){
+        let ikm = ratchet;
+        let (rk,ck) = keys_from_kdf(ikm.to_bytes(),"WhisperRatchet".as_bytes(),&root_bytes);
         (Rootkey(rk),ChainKey(ck))
     }
 
     /// Returns derived Message key for given Chain key as well as the next Chain key to be used.
     fn derive_next_chain_and_message_key(chain_key : &Self::ChainKey) -> (Self::ChainKey, Self::MessageKey){
- 
         let ikm = chain_key.hmac( &SEED_MSG_KEY ); 
-        let msg_key = generate_message_key(&ikm,"WhisperMessage".as_bytes(),&SEED_NULL);
+        let msg_key = generate_message_key(&ikm,"WhisperMessageKeys".as_bytes(),&SEED_NULL);
         (chain_key.next(),msg_key)
     }
     
@@ -222,7 +211,6 @@ impl axolotl::Axolotl for TextSecureV3{
 fn keys_from_kdf(input_key_material : &[u8] , info : &[u8], salt : &[u8]  ) -> ([u8;KEY_LEN_ROOT], [u8;KEY_LEN_CHAIN]) {
     let mut output_key_material :[u8; KEY_LEN_ROOT + KEY_LEN_CHAIN ] = [0; KEY_LEN_ROOT + KEY_LEN_CHAIN]; 
     hkdf::derive_key(input_key_material, info,salt,&mut output_key_material);
-
     split_raw_keys(output_key_material)
 }
 

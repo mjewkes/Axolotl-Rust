@@ -2,7 +2,8 @@
 /// 
 /// TODO: Should be pulled into it's own project
 
-use rand::{OsRng, Rng};
+extern crate rand;
+use self::rand::{OsRng, Rng};
 
 pub const PUB_KEY_LEN : usize = 32;
 pub const PRIV_KEY_LEN : usize = 32;
@@ -85,6 +86,10 @@ pub struct SharedKey {
 impl SharedKey {
     pub fn to_bytes(&self) -> &[u8;SHARED_KEY_LEN] {
         &self.val
+    }
+
+    pub fn from_bytes(b : [u8;SHARED_KEY_LEN]) ->Self {
+        SharedKey{val: b}
     }
 }
 
