@@ -116,6 +116,24 @@ impl <T:Axolotl> ReceiveChain<T> {
         return Some(self.message_keys.len()-1);
     }
 
+    fn try_decrypt_with_message_key_index(
+        &self,
+        message : &AxolotlMessage<T>, 
+        mac : T::Mac,
+        sender_identity : &DHPublic<T::IdentityKey>, 
+        receiver_identity : &DHPublic<T::IdentityKey>,
+        message_key_index : usize,
+    ) -> Option<T::PlainText> {
+        let (_,ref message_key) = self.message_keys[message_key_index];
+        let expected_mac = T::authenticate_message(message, message_key, sender_identity, receiver_identity);
+        if expected_mac == mac {
+            T::decrypt_message(&message_key, &message.ciphertext)
+        }
+        else {
+            None
+        }
+    }
+
     fn try_decrypt(
         &mut self,
         message : &AxolotlMessage<T>, 
@@ -125,18 +143,16 @@ impl <T:Axolotl> ReceiveChain<T> {
     ) -> Option<T::PlainText> {
         self.try_get_message_key_index(message.message_number)
             .and_then(|message_key_index| {
-                let (_,ref message_key) = self.message_keys[message_key_index];
-                let expected_mac = T::authenticate_message(message, message_key, sender_identity, receiver_identity);
-                if expected_mac == mac {
-                    T::decrypt_message(&message_key, &message.ciphertext)
-                        .map(|plaintext| (message_key_index, plaintext))
+                let plaintext = self.try_decrypt_with_message_key_index(
+                    message, 
+                    mac, 
+                    sender_identity, 
+                    receiver_identity, 
+                    message_key_index
+                );
+                if plaintext.is_some() {
+                    self.message_keys.remove(message_key_index);
                 }
-                else {
-                    None
-                }
-            })
-            .map(|(message_key_index,plaintext)| {
-                self.message_keys.remove(message_key_index);
                 plaintext
             })
     }
@@ -196,16 +212,15 @@ impl <T:Axolotl> AxolotlState<T> {
             message_keys : Vec::new(),
         };
 
-        new_receive_chain
-            .try_decrypt(message, mac, &self.identity_key_local, &self.identity_key_remote)
-            .map(|plaintext| {
-                self.receive_chains.insert(0, new_receive_chain);
-                self.receive_chains.truncate(truncate_to);
-                self.message_number_send = 0;
-                self.root_key = root_key;
-                self.chain_key_send = chain_key_send;
-                self.ratchet_key_send = new_ratchet_key_send;
-                plaintext
-            })
+        let plaintext = new_receive_chain.try_decrypt(message, mac, &self.identity_key_local, &self.identity_key_remote);
+        if plaintext.is_some() {
+            self.receive_chains.insert(0, new_receive_chain);
+            self.receive_chains.truncate(truncate_to);
+            self.message_number_send = 0;
+            self.root_key = root_key;
+            self.chain_key_send = chain_key_send;
+            self.ratchet_key_send = new_ratchet_key_send;
+        }
+        plaintext
     }
 }
