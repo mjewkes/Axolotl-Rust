@@ -1,9 +1,9 @@
 /// HKDF Wrapper Function
 extern crate crypto;
 
-use crypto::sha2::Sha256;
-use crypto::hkdf;
-use crypto::digest::Digest;     // False Warning
+use self::crypto::sha2::Sha256;
+use self::crypto::hkdf;
+use self::crypto::digest::Digest;     // False Warning
 
 const DIGEST_LENGTH : usize = 32;
 
@@ -21,7 +21,7 @@ mod tests {
     extern crate crypto;
 
     use super::*;
-    use crypto::digest::Digest; // False Warning
+    use self::crypto::digest::Digest; // False Warning
 
      #[test]
      fn rfc5869_kat_1(){

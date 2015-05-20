@@ -3,11 +3,11 @@ extern crate crypto;
 
 //  Re-export MacResult so it is available when this Mod is imported.
 //  if backing library Changes this Struct will have to be reimplemented for timing Safety
-pub use crypto::mac::MacResult;
+pub use self::crypto::mac::MacResult;
 
-use crypto::hmac::Hmac as rc_Hmac;
-use crypto::sha2::Sha256;
-use crypto::mac::Mac;
+use self::crypto::hmac::Hmac as rc_Hmac;
+use self::crypto::sha2::Sha256;
+use self::crypto::mac::Mac;
 
 pub struct HmacSha256{
     context : rc_Hmac<Sha256>,
