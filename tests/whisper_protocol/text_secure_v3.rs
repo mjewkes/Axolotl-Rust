@@ -1,5 +1,5 @@
 extern crate raxolotl;
-pub use self::raxolotl::axolotl::{Axolotl,AxolotlMessage,ExchangedPair,KeyPair};
+pub use self::raxolotl::axolotl::{Axolotl,AxolotlMessage,KeyPair};
 
 use whisper_protocol::crypto_wrappers::{aes_cbc,curve25519,hkdf,hmac};
 

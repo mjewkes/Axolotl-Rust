@@ -82,11 +82,6 @@ pub struct KeyPair<T> where T:Axolotl {
     pub public : T::PublicKey,
 }
 
-pub struct ExchangedPair<T> where T:Axolotl {
-    pub mine : T::PrivateKey,
-    pub theirs : T::PublicKey,
-}
-
 impl <T:Axolotl> Clone for KeyPair<T> {
     fn clone(&self) -> Self {
         KeyPair { 

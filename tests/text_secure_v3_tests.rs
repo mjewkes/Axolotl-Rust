@@ -2,7 +2,7 @@ mod whisper_protocol;
 
 use whisper_protocol::{axolotl};
 use whisper_protocol::crypto_wrappers::curve25519;
-use whisper_protocol::text_secure_v3::{ExchangedPair,KeyPair,PlainText,TextSecureV3};
+use whisper_protocol::text_secure_v3::{KeyPair,PlainText,TextSecureV3};
 
 #[test]
 fn dynamic_roundtrip_echo(){
@@ -101,25 +101,23 @@ fn android_session_kat () {
                                             public : curve25519::PublicKey::from_bytes(alice_sending_ratchet_public)
                                         }; 
     let bob_ratchet_keypair = bob_base_keypair.clone();
-    
-    let alice_exchanged_identity : ExchangedPair<TextSecureV3> = ExchangedPair { mine : alice_identity_keypair.key, theirs : bob_identity_keypair.public };
-    let alice_exchanged_handshake : ExchangedPair<TextSecureV3> = ExchangedPair { mine : alice_base_keypair.key, theirs : bob_base_keypair.public };
-    let bob_exchanged_identity : ExchangedPair<TextSecureV3>= ExchangedPair { mine : bob_identity_keypair.key, theirs : alice_identity_keypair.public };
-    let bob_exchanged_handshake :ExchangedPair<TextSecureV3>= ExchangedPair { mine : bob_base_keypair.key, theirs : alice_base_keypair.public };
-
 
     let mut alice = axolotl::init_as_alice_with_explicit_ratchet_keypair::<TextSecureV3>(
         axolotl_impl,
-        &alice_exchanged_identity, 
-        &alice_exchanged_handshake, 
-        alice_sending_ratchet_keypair, 
+        &alice_identity_keypair.key,
+        &bob_identity_keypair.public,
+        &alice_base_keypair.key,
+        &bob_base_keypair.public,
+        alice_sending_ratchet_keypair,
         &bob_ratchet_keypair.public
     );
 
     let mut bob = axolotl::init_as_bob::<TextSecureV3>(
         axolotl_impl,
-        &bob_exchanged_identity, 
-        &bob_exchanged_handshake, 
+        &bob_identity_keypair.key,
+        &alice_identity_keypair.public,
+        &bob_base_keypair.key,
+        &alice_base_keypair.public,
         bob_ratchet_keypair
     );
     
@@ -171,12 +169,21 @@ fn init_dynamic_axolotl_states(axolotl_impl : &TextSecureV3) -> (axolotl::Axolot
     let bob_handshake = dhkey_pair();
     let initial_ratchet = dhkey_pair();
 
-    let alice_exchanged_identity = ExchangedPair { mine : alice_identity.key, theirs : bob_identity.public };
-    let alice_exchanged_handshake = ExchangedPair { mine : alice_handshake.key, theirs : bob_handshake.public };
-    let bob_exchanged_identity = ExchangedPair { mine : bob_identity.key, theirs : alice_identity.public };
-    let bob_exchanged_handshake = ExchangedPair { mine : bob_handshake.key, theirs : alice_handshake.public };
-
-    let alice = axolotl::init_as_alice::<TextSecureV3>(axolotl_impl, &alice_exchanged_identity, &alice_exchanged_handshake, &initial_ratchet.public);
-    let bob = axolotl::init_as_bob::<TextSecureV3>(axolotl_impl, &bob_exchanged_identity, &bob_exchanged_handshake, initial_ratchet);
+    let alice = axolotl::init_as_alice::<TextSecureV3>(
+      axolotl_impl, 
+      &alice_identity.key,
+      &bob_identity.public,
+      &alice_handshake.key,
+      &bob_handshake.public, 
+      &initial_ratchet.public
+    );
+    let bob = axolotl::init_as_bob::<TextSecureV3>(
+      axolotl_impl, 
+      &bob_identity.key,
+      &alice_identity.public,
+      &bob_handshake.key,
+      &alice_handshake.public, 
+      initial_ratchet
+    );
     (alice,bob)
 }
