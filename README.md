@@ -1,6 +1,6 @@
 # RAxolotl
 
-AxolotlKit is a free implementation of the Axolotl protocol, written in Rust. Originally reference and [README forked from AxolotlKit] (https://github.com/WhisperSystems/AxolotlKit/blob/master/README.md)
+AxolotlKit is a free implementation of the Axolotl protocol, written in Rust. Original reference and [README forked from AxolotlKit] (https://github.com/WhisperSystems/AxolotlKit/blob/master/README.md)
 
 ### Status
 
@@ -16,4 +16,5 @@ Axolotl is an [asynchronous cryptographic ratcheting protocol](https://github.co
 ## Credit
 
 Thanks to Frederic Jacobs for the Objective-C implementation, heavily used for reference, as well as the README most of which is replicated here.
+
 Thanks to Trevor Perrin and Moxie Marlinspike for the amazing work on the Axolotl protocol and original implementation. 
