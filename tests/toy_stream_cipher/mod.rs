@@ -21,6 +21,12 @@ fn next_rng() -> ChaChaRng {
 
 pub struct Substitution;
 
+pub struct Message {
+    pub message_number : usize,
+    pub ratchet_key : u64,
+    pub ciphertext : Vec<u8>,   
+}
+
 impl Axolotl for Substitution {
     type PrivateKey = u64;
     type PublicKey = u64;
@@ -34,6 +40,8 @@ impl Axolotl for Substitution {
     type CipherText = Vec<u8>;
 
     type Mac = ();
+
+    type Message = Message;
 
     fn derive_initial_root_key_and_chain_key(&self, a : &u64, b : &u64, c : &u64) -> (u64,u64) {
         let seed = *a ^ b.wrapping_mul(31) ^ c.wrapping_mul(31*31);
@@ -88,7 +96,29 @@ impl Axolotl for Substitution {
         Some(plaintext)
     }
 
-    fn authenticate_message(&self, _ : &AxolotlMessage<Substitution>, _ : &u64, _ : &u64, _ : &u64) {
+    fn authenticate_message(&self, _ : &Self::Message, _ : &u64, _ : &u64, _ : &u64) {
+    }
+
+    fn encode_header_and_ciphertext(
+        &self,
+        header : (usize, Self::PublicKey),
+        ciphertext : Self::CipherText
+    ) -> Self::Message {
+        Message{
+            message_number : header.0,
+            ratchet_key : header.1,
+            ciphertext : ciphertext,
+        }
+    }
+
+    fn with_decoded_header<F,T>(&self, message : &Self::Message, f : F
+    ) -> T where F:FnOnce(usize, &Self::PublicKey) -> T {
+        f(message.message_number, &message.ratchet_key)
+    }
+
+    fn with_decoded_ciphertext<F,T>(&self, message : &Self::Message, f : F
+    ) -> T where F:FnOnce(&Self::CipherText) -> T {
+        f(&message.ciphertext)
     }
 
     fn ratchet_keys_are_equal(&self, a : &u64, b : &u64) -> bool {
@@ -151,7 +181,7 @@ pub fn init_alice_and_bob(axolotl_impl : &Substitution) -> (AxolotlState<Substit
     (alice,bob)
 }
 
-pub fn check_send(axolotl_impl : &Substitution, sender : &mut AxolotlState<Substitution>, receiver : &mut AxolotlState<Substitution>, message : String) -> AxolotlMessage<Substitution> {
+pub fn check_send(axolotl_impl : &Substitution, sender : &mut AxolotlState<Substitution>, receiver : &mut AxolotlState<Substitution>, message : String) -> Message {
     let m = message.into_bytes();
     let encrypted = sender.encrypt(axolotl_impl, &m);
     let decrypted = receiver.decrypt(axolotl_impl, &encrypted.0, encrypted.1).unwrap();
