@@ -1,5 +1,5 @@
 extern crate raxolotl;
-pub use self::raxolotl::axolotl::{Axolotl,AxolotlMessage,KeyPair};
+pub use self::raxolotl::axolotl::{Axolotl,KeyPair};
 
 use whisper_protocol::crypto_wrappers::{aes_cbc,curve25519,hkdf,hmac};
 
@@ -68,6 +68,12 @@ pub struct CipherTextAndVersion{
     version : u8,
 }
 
+pub struct Message {
+    pub message_number : usize,
+    pub ratchet_key : curve25519::PublicKey,
+    pub ciphertext : CipherTextAndVersion,   
+}
+
 impl Axolotl for TextSecureV3{
     type PrivateKey = curve25519::PrivateKey;
     type PublicKey  = curve25519::PublicKey;
@@ -81,6 +87,8 @@ impl Axolotl for TextSecureV3{
     type CipherText = CipherTextAndVersion;
 
     type Mac = hmac::MacResult;
+
+    type Message = Message; //TODO: replace with protocol buffer
 
     /// Returns initial Root and Chain keys derived from initial the TripleDH handshake. 
     fn derive_initial_root_key_and_chain_key(
@@ -151,7 +159,7 @@ impl Axolotl for TextSecureV3{
 
     fn authenticate_message(
         &self,
-        message : &AxolotlMessage<Self>, 
+        message : &Self::Message,
         message_key : &Self::MessageKey, 
         sender_identity : &Self::PublicKey, 
         receiver_identity : &Self::PublicKey
@@ -162,6 +170,28 @@ impl Axolotl for TextSecureV3{
         mac_state.input(receiver_identity.to_bytes());
         mac_state.input(&message.ciphertext.cipher_text[..]); //TODO: input the version
         hmac::truncate_mac_result(mac_state.result(), 8)
+    }
+
+    fn encode_header_and_ciphertext(
+        &self,
+        header : (usize, Self::PublicKey),
+        ciphertext : Self::CipherText
+    ) -> Self::Message {
+        Message{
+            message_number : header.0,
+            ratchet_key : header.1,
+            ciphertext : ciphertext,
+        }
+    }
+
+    fn with_decoded_header<F,T>(&self, message : &Self::Message, f : F
+    ) -> T where F:FnOnce(usize, &Self::PublicKey) -> T {
+        f(message.message_number, &message.ratchet_key)
+    }
+
+    fn with_decoded_ciphertext<F,T>(&self, message : &Self::Message, f : F
+    ) -> T where F:FnOnce(&Self::CipherText) -> T {
+        f(&message.ciphertext)
     }
 
     fn ratchet_keys_are_equal(&self, key0 : &Self::PublicKey, key1 : &Self::PublicKey) -> bool{
