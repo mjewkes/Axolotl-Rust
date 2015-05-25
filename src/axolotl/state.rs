@@ -1,4 +1,4 @@
-use super::axolotl::{Axolotl, ExchangedPair, KeyPair};
+use super::axolotl::{Axolotl, KeyPair};
 use super::message::{AxolotlMessage};
 
 pub struct AxolotlState<T> where T:Axolotl {
@@ -24,16 +24,20 @@ struct ReceiveChain<T> where T:Axolotl {
 
 pub fn init_as_alice<T>(
     axolotl_impl : &T,
-    identity_keys : &ExchangedPair<T>, 
-    handshake_keys : &ExchangedPair<T>,
+    identity_key_local : &T::PrivateKey,
+    identity_key_remote : &T::PublicKey,
+    handshake_key_local : &T::PrivateKey,
+    handshake_key_remote : &T::PublicKey,
     initial_ratchet_key : &T::PublicKey
     ) -> AxolotlState<T> 
     where T:Axolotl {
         let ratchet_keypair = axolotl_impl.generate_ratchet_key_pair();
         init_as_alice_with_explicit_ratchet_keypair(
             axolotl_impl,
-            identity_keys,
-            handshake_keys,
+            identity_key_local,
+            identity_key_remote,
+            handshake_key_local,
+            handshake_key_remote,
             ratchet_keypair,
             initial_ratchet_key
         ) 
@@ -41,15 +45,17 @@ pub fn init_as_alice<T>(
 }
 pub fn init_as_alice_with_explicit_ratchet_keypair<T>(
     axolotl_impl : &T,
-    identity_keys : &ExchangedPair<T>, 
-    handshake_keys : &ExchangedPair<T>,
+    identity_key_local : &T::PrivateKey,
+    identity_key_remote : &T::PublicKey,
+    handshake_key_local : &T::PrivateKey,
+    handshake_key_remote : &T::PublicKey,
     my_ratchet_keypair : KeyPair<T>,
     initial_ratchet_key : &T::PublicKey) 
 -> AxolotlState<T> 
     where T:Axolotl {
-        let ab0 = axolotl_impl.derive_shared_secret(&identity_keys.mine, &handshake_keys.theirs);
-        let a0b = axolotl_impl.derive_shared_secret(&handshake_keys.mine, &identity_keys.theirs);
-        let a0b0 = axolotl_impl.derive_shared_secret(&handshake_keys.mine, &handshake_keys.theirs);
+        let ab0 = axolotl_impl.derive_shared_secret(&identity_key_local, &handshake_key_remote);
+        let a0b = axolotl_impl.derive_shared_secret(&handshake_key_local, &identity_key_remote);
+        let a0b0 = axolotl_impl.derive_shared_secret(&handshake_key_local, &handshake_key_remote);
         let (pre_root_key, chain_key_recv) = axolotl_impl.derive_initial_root_key_and_chain_key(&ab0, &a0b, &a0b0);
         let ratchet_key = my_ratchet_keypair;
         let ratchet_key_derive_shared_secret = axolotl_impl.derive_shared_secret(&ratchet_key.key, initial_ratchet_key);
@@ -62,8 +68,8 @@ pub fn init_as_alice_with_explicit_ratchet_keypair<T>(
         };
         AxolotlState {
             root_key : root_key,
-            identity_key_local : axolotl_impl.derive_public_key(&identity_keys.mine),
-            identity_key_remote : identity_keys.theirs.clone(),
+            identity_key_local : axolotl_impl.derive_public_key(&identity_key_local),
+            identity_key_remote : identity_key_remote.clone(),
             message_number_send : 0,
             chain_key_send : chain_key_send,
             ratchet_key_send : ratchet_key,
@@ -73,19 +79,21 @@ pub fn init_as_alice_with_explicit_ratchet_keypair<T>(
 
 pub fn init_as_bob<T>(
     axolotl_impl : &T,
-    identity_keys : &ExchangedPair<T>, 
-    handshake_keys : &ExchangedPair<T>, 
+    identity_key_local : &T::PrivateKey,
+    identity_key_remote : &T::PublicKey,
+    handshake_key_local : &T::PrivateKey,
+    handshake_key_remote : &T::PublicKey,
     initial_ratchet_key : KeyPair<T>) 
 -> AxolotlState<T> 
     where T:Axolotl {
-        let ab0 = axolotl_impl.derive_shared_secret(&handshake_keys.mine, &identity_keys.theirs);
-        let a0b = axolotl_impl.derive_shared_secret(&identity_keys.mine, &handshake_keys.theirs);
-        let a0b0 = axolotl_impl.derive_shared_secret(&handshake_keys.mine, &handshake_keys.theirs);
+        let ab0 = axolotl_impl.derive_shared_secret(&handshake_key_local, &identity_key_remote);
+        let a0b = axolotl_impl.derive_shared_secret(&identity_key_local, &handshake_key_remote);
+        let a0b0 = axolotl_impl.derive_shared_secret(&handshake_key_local, &handshake_key_remote);
         let (root_key, chain_key_send) = axolotl_impl.derive_initial_root_key_and_chain_key(&ab0, &a0b, &a0b0);
         AxolotlState {
             root_key : root_key,
-            identity_key_local : axolotl_impl.derive_public_key(&identity_keys.mine),
-            identity_key_remote : identity_keys.theirs.clone(),
+            identity_key_local : axolotl_impl.derive_public_key(&identity_key_local),
+            identity_key_remote : identity_key_remote.clone(),
             message_number_send : 0,
             chain_key_send : chain_key_send,
             ratchet_key_send : initial_ratchet_key,

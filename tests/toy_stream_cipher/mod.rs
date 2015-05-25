@@ -131,13 +131,22 @@ pub fn init_alice_and_bob(axolotl_impl : &Substitution) -> (AxolotlState<Substit
     let bob_handshake = axolotl_impl.generate_ratchet_key_pair();
     let initial_ratchet = axolotl_impl.generate_ratchet_key_pair();
 
-    let alice_exchanged_identity = ExchangedPair { mine : alice_identity.key, theirs : bob_identity.public };
-    let alice_exchanged_handshake = ExchangedPair { mine : alice_handshake.key, theirs : bob_handshake.public };
-    let bob_exchanged_identity = ExchangedPair { mine : bob_identity.key, theirs : alice_identity.public };
-    let bob_exchanged_handshake = ExchangedPair { mine : bob_handshake.key, theirs : alice_handshake.public };
-
-    let alice = init_as_alice::<Substitution>(axolotl_impl, &alice_exchanged_identity, &alice_exchanged_handshake, &initial_ratchet.public);
-    let bob = init_as_bob::<Substitution>(axolotl_impl, &bob_exchanged_identity, &bob_exchanged_handshake, initial_ratchet);
+    let alice = init_as_alice::<Substitution>(
+        axolotl_impl, 
+        &alice_identity.key, 
+        &bob_identity.public,
+        &alice_handshake.key,
+        &bob_handshake.public, 
+        &initial_ratchet.public
+    );
+    let bob = init_as_bob::<Substitution>(
+        axolotl_impl,
+        &bob_identity.key,
+        &alice_identity.public,
+        &bob_handshake.key,
+        &alice_handshake.public,
+        initial_ratchet
+    );
 
     (alice,bob)
 }
