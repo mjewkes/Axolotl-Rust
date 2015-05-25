@@ -68,9 +68,17 @@ pub trait Axolotl {
         ciphertext : Self::CipherText
     ) -> Self::Message;
 
+    /** 
+        decode header is in continuation passing style so that the implementor is free to implement decode 
+        as a reference to the message, or as a reference to a local variable.
+    **/
     fn with_decoded_header<F,T>(&self, message : &Self::Message, f : F
     ) -> T where F:FnOnce(usize, &Self::PublicKey) -> T;
 
+    /** 
+        decode ciphertext is in continuation passing style so that the implementor is free to implement decode 
+        as a reference to the message, or as a reference to a local variable.
+    **/
     fn with_decoded_ciphertext<F,T>(&self, message : &Self::Message, f : F
     ) -> T where F:FnOnce(&Self::CipherText) -> T;
 
