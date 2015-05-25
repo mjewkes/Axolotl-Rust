@@ -1,4 +1,4 @@
-pub use axolotl::{self,Axolotl,AxolotlMessage,ExchangedPair,KeyPair};
+pub use axolotl::{self,Axolotl,AxolotlMessage,KeyPair};
 use crypto_wrappers::{hkdf,hmac};
 use std::ops::*;
 use std::usize::MAX;
@@ -39,67 +39,36 @@ derive_deref!(PublicKey);
 pub struct SharedKey( [u8;KEY_LEN] );
 derive_deref!(SharedKey);
 
-const KEY_LEN_CHAIN : usize = KEY_LEN;
-const KEY_LEN_ROOT  : usize = KEY_LEN;
-const KEY_LEN_MAC   : usize = KEY_LEN;
-const KEY_LEN_CIPHER: usize = KEY_LEN;
-const KEY_LEN_IV    : usize = 16;
+pub const KEY_LEN_CHAIN : usize = KEY_LEN;
+pub const KEY_LEN_ROOT  : usize = KEY_LEN;
+pub const KEY_LEN_MAC   : usize = KEY_LEN;
+pub const KEY_LEN_CIPHER: usize = KEY_LEN;
+pub const KEY_LEN_IV    : usize = 16;
 
 const SEED_NULL     : [u8;1] = [0]; 
 const SEED_MSG_KEY  : [u8;1] = [1];
 const SEED_CHAIN_KEY: [u8;1] = [2];
 
-const KEY_LEN : usize = 32;
+pub const KEY_LEN : usize = 32;
 
-pub type KeyGenFunc = fn( )                               -> ([u8;KEY_LEN],[u8;KEY_LEN]);
-pub type PubKeyFunc = fn( [u8; KEY_LEN] )                 -> ([u8;KEY_LEN]); 
-pub type DhFunc     = fn( [u8; KEY_LEN], [u8; KEY_LEN] )  -> ([u8;KEY_LEN]);
+pub trait BaseImplementation {
+    fn gen_key_pair() ->  ([u8;KEY_LEN],[u8;KEY_LEN]);
+    fn gen_pub_key(private : [u8; KEY_LEN] ) -> ( [u8;KEY_LEN]);
+    fn dh_key_exchange( local_private :  [u8; KEY_LEN], remote_pub: [u8; KEY_LEN] ) -> ([u8;KEY_LEN]);
 
-pub type EncryptFunc = fn( &[u8], [u8; KEY_LEN], [u8; KEY_LEN_IV] ) -> (Vec<u8>);
-pub type DecryptFunc = fn( &[u8], [u8; KEY_LEN], [u8; KEY_LEN_IV] ) -> (Vec<u8>);
+    fn enc_bytes( data : &[u8], key : [u8;KEY_LEN], iv : [ u8; KEY_LEN_IV] ) -> (Vec<u8>); 
+    fn dec_bytes( ciphertext : &[u8], key : [u8;KEY_LEN], iv : [ u8; KEY_LEN_IV] ) -> (Vec<u8>); 
 
-pub struct BaseImplementation{
-   
-    fn_key_gen :        KeyGenFunc,
-    fn_key_gen_pub :    PubKeyFunc,             // To be removed
-    fn_dhke :           DhFunc,
+    fn get_masterkey_prefix() -> Option<[u8;KEY_LEN]>;
 
-    kdf_info_init :     String,
-    kdf_info_ratchet :  String,
-    kdf_info_msg :      String,
+    fn kdf_info_init() ->  String;
+    fn kdf_info_ratchet() ->  String;
+    fn kdf_info_msg() ->  String;
 
-    fn_enc :            EncryptFunc,
-    fn_dec :            DecryptFunc,
-
-    master_key_prefix : Option<[u8;KEY_LEN]>,   //TODO: Add Optional Prefix 
 }
 
-impl BaseImplementation {
-    pub fn init(
-        fn_priv_key_gen :   KeyGenFunc,
-        fn_pub_key_gen :    PubKeyFunc,
-        fn_dhke :           DhFunc,
-        kdf_info_init :     String,
-        kdf_info_ratchet :  String,
-        kdf_info_msg :      String,
-        fn_enc :            EncryptFunc,
-        fn_dec :            DecryptFunc,
-    ) -> Self{
-        BaseImplementation{
-            master_key_prefix : None, 
-            fn_key_gen : fn_priv_key_gen,
-            fn_key_gen_pub : fn_pub_key_gen,
-            fn_dhke  :  fn_dhke,
-            kdf_info_init : kdf_info_init,
-            kdf_info_ratchet : kdf_info_ratchet,
-            kdf_info_msg : kdf_info_msg,
-            fn_enc : fn_enc,
-            fn_dec : fn_dec,
-        }
-    } 
-}
 
-impl Axolotl for BaseImplementation{
+impl<T:BaseImplementation> Axolotl for T {
     type PrivateKey = PrivateKey;
     type PublicKey = PublicKey;
     type SharedSecret = SharedKey;
@@ -122,7 +91,7 @@ impl Axolotl for BaseImplementation{
         
         let mut master_key : Vec<u8> = Vec::<u8>::new();
 
-        match self.master_key_prefix{
+        match T::get_masterkey_prefix(){
             None => {},
             Some(val) => master_key.extend(val.iter().map(|&x| x)) // Can we remove and append Zero Bytes? 
         }
@@ -131,7 +100,7 @@ impl Axolotl for BaseImplementation{
         master_key.extend(local_handshake_remote_identity_dh_secred.iter().map(|&x| x));
         master_key.extend(local_handshake_remote_handshake_dh_secret.iter().map(|&x| x));
 
-        let (rk, ck) = keys_from_kdf(&master_key[..], self.kdf_info_init.as_bytes(),&SEED_NULL);
+        let (rk, ck) = keys_from_kdf(&master_key[..], T::kdf_info_init().as_bytes(),&SEED_NULL);
         (RootKey(rk),ChainKey(ck))
     }
 
@@ -142,7 +111,7 @@ impl Axolotl for BaseImplementation{
         ratchet : &Self::SharedSecret
     ) -> (Self::RootKey, Self::ChainKey){
         let ikm = **ratchet;
-        let (rk,ck) = keys_from_kdf(&ikm,self.kdf_info_ratchet.as_bytes(),&root_bytes);
+        let (rk,ck) = keys_from_kdf(&ikm,T::kdf_info_ratchet().as_bytes(),&root_bytes);
         (RootKey(rk),ChainKey(ck))
     }
 
@@ -152,7 +121,7 @@ impl Axolotl for BaseImplementation{
         chain_key : &Self::ChainKey
     ) -> (Self::ChainKey, Self::MessageKey){
         let ikm = chain_key.hmac( &SEED_MSG_KEY ); 
-        let msg_key = generate_message_key(&ikm,self.kdf_info_msg.as_bytes(),&SEED_NULL);
+        let msg_key = generate_message_key(&ikm,T::kdf_info_msg().as_bytes(),&SEED_NULL);
         (chain_key.next(),msg_key)
     }
 
@@ -163,7 +132,7 @@ impl Axolotl for BaseImplementation{
     ) -> Self::CipherText{
         
         let PlainText(ref text) = *plaintext;
-        let ciphertext = (self.fn_enc)(text,message_key.cipher_key, message_key.iv);
+        let ciphertext = Self::enc_bytes(text,message_key.cipher_key, message_key.iv);
         CipherTextAndVersion {
             version : 3,
             cipher_text : ciphertext.into_boxed_slice(),
@@ -180,7 +149,7 @@ impl Axolotl for BaseImplementation{
             return None;
         }
 
-        let result = (self.fn_dec)(&ciphertext.cipher_text, message_key.cipher_key, message_key.iv);
+        let result = Self::dec_bytes(&ciphertext.cipher_text, message_key.cipher_key, message_key.iv);
         Some(PlainText(result.into_boxed_slice()))
     }
 
@@ -208,7 +177,7 @@ impl Axolotl for BaseImplementation{
     }
 
     fn generate_ratchet_key_pair(&self) -> KeyPair<Self>{
-        let (private_bytes,public_bytes) = (self.fn_key_gen)();
+        let (private_bytes,public_bytes) = T::gen_key_pair();
 
         KeyPair{
             key: PrivateKey(private_bytes), 
@@ -218,11 +187,11 @@ impl Axolotl for BaseImplementation{
     }
 
     fn derive_shared_secret(&self, key : &Self::PrivateKey, public : &Self::PublicKey) -> Self::SharedSecret{
-        SharedKey((self.fn_dhke)(**key,**public))
+        SharedKey(T::dh_key_exchange(**key,**public))
     }
 
     fn derive_public_key(&self, key : &Self::PrivateKey) -> Self::PublicKey{
-        let public = (self.fn_key_gen_pub)(**key);
+        let public = T::gen_pub_key(**key);
         PublicKey(public)
     }
 
@@ -320,71 +289,85 @@ fn split_raw_msg_keys(bytes: [u8; KEY_LEN_CIPHER+KEY_LEN_MAC+KEY_LEN_IV]) -> ([u
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::{KEY_LEN,KEY_LEN_CIPHER,KEY_LEN_IV};
     use crypto_wrappers::{aes_cbc,curve25519};
 
-    // ========= PASS INS ===========
-    pub fn dhkey_pair() -> KeyPair<BaseImplementation> {
-        let (private,public)    = gen_keypair();
+    pub fn dhkey_pair() -> KeyPair<TestImpl> {
+        let (private,public)    = TestImpl::gen_key_pair();
         let priv_key            = PrivateKey(private);
         let pub_key             = PublicKey(public);
 
         KeyPair{ key :priv_key, public : pub_key}
     } 
 
-    pub fn gen_keypair() -> ([u8;32],[u8;32]) {
-        let p = curve25519::generate_private_key();
-        (*p, *curve25519::derive_public_key(&p))
-    }
+    pub struct TestImpl;
 
-    pub fn gen_pub(p : [u8;32]) -> ([u8;32]) {
-        *curve25519::derive_public_key(&curve25519::PrivateKey(p))
-    }
+    impl BaseImplementation for TestImpl {
+       
+        fn gen_key_pair() -> ([u8;32],[u8;32]) {
+            let p = curve25519::generate_private_key();
+            (*p, *curve25519::derive_public_key(&p))
+        }
 
-    pub fn curve25519_shared(private : [u8;32], public :[u8;32]) -> [u8;32] {
-        let Pk = curve25519::PrivateKey(private);
-        let pk = curve25519::PublicKey(public);
-        *curve25519::derive_shared_key(&Pk,&pk)
-    }
+        fn gen_pub_key(p : [u8;32]) -> ([u8;32]) {
+            *curve25519::derive_public_key(&curve25519::PrivateKey(p))
+        }
 
-    pub fn ext_encrypt(data : &[u8], key :  [u8; KEY_LEN_CIPHER], iv : [u8;KEY_LEN_IV]) -> Vec<u8>{    // Need to Change iv-len to allow for CTR or other modes
-        aes_cbc::encrypt_aes256_cbc_mode(data,key, iv)
-    }
+        fn dh_key_exchange(private : [u8;32], public :[u8;32]) -> [u8;32] {
+            let Pk = curve25519::PrivateKey(private);
+            let pk = curve25519::PublicKey(public);
+            *curve25519::derive_shared_key(&Pk,&pk)
+        }
 
-    pub fn ext_decrypt(ciphertext : &[u8], key :  [u8; KEY_LEN_CIPHER], iv : [u8;KEY_LEN_IV]) -> Vec<u8>{
-        aes_cbc::decrypt_aes256_cbc_mode(&ciphertext, key, iv)
+        fn enc_bytes(data : &[u8], key :  [u8; KEY_LEN_CIPHER], iv : [u8;KEY_LEN_IV]) -> Vec<u8>{    // Need to Change iv-len to allow for CTR or other modes
+            aes_cbc::encrypt_aes256_cbc_mode(data,key, iv)
+        }
+
+        fn dec_bytes(ciphertext : &[u8], key :  [u8; KEY_LEN_CIPHER], iv : [u8;KEY_LEN_IV]) -> Vec<u8>{
+            aes_cbc::decrypt_aes256_cbc_mode(&ciphertext, key, iv)
+        }
+
+        fn get_masterkey_prefix() -> Option<[u8;KEY_LEN]>{
+            Some([0xFF;KEY_LEN])
+        }
+
+        fn kdf_info_init() ->  String {
+            "WhisperText".to_string()
+        }
+        fn kdf_info_ratchet() ->  String{
+            "WhisperRatchet".to_string()
+        }
+        fn kdf_info_msg() ->  String{
+            "WhisperMessageKeys".to_string()
+        }
     }
 
     #[test]
     fn dynamic_echo_roundtrip(){
 
-        let base_impl = BaseImplementation::init(
-            gen_keypair,
-            gen_pub,
-            curve25519_shared,
+        let base_impl = TestImpl;
 
-            "WhisperText".to_string(),
-            "WhisperRatchet".to_string(),
-            "WhisperMessageKeys".to_string(),
-
-            ext_encrypt,
-            ext_decrypt,
-        );
-
-        let alice_identity  = dhkey_pair();
+        let alice_identity = dhkey_pair();
         let alice_handshake = dhkey_pair();
         let bob_identity = dhkey_pair();
         let bob_handshake = dhkey_pair();
         let initial_ratchet = dhkey_pair();
 
-        let alice_exchanged_identity = ExchangedPair::<BaseImplementation> { mine : alice_identity.key, theirs : bob_identity.public };
-        let alice_exchanged_handshake = ExchangedPair::<BaseImplementation>  { mine : alice_handshake.key, theirs : bob_handshake.public };
-        let bob_exchanged_identity = ExchangedPair::<BaseImplementation>  { mine : bob_identity.key, theirs : alice_identity.public };
-        let bob_exchanged_handshake = ExchangedPair::<BaseImplementation>  { mine : bob_handshake.key, theirs : alice_handshake.public };
-
-        let mut alice = axolotl::init_as_alice::<BaseImplementation>(&base_impl, &alice_exchanged_identity, &alice_exchanged_handshake, &initial_ratchet.public);
-        let mut bob   = axolotl::init_as_bob::<BaseImplementation>(&base_impl, &bob_exchanged_identity, &bob_exchanged_handshake, initial_ratchet);
-
+        let mut alice = axolotl::init_as_alice::<TestImpl>(
+          &base_impl, 
+          &alice_identity.key,
+          &bob_identity.public,
+          &alice_handshake.key,
+          &bob_handshake.public, 
+          &initial_ratchet.public
+        );
+        let mut bob = axolotl::init_as_bob::<TestImpl>(
+          &base_impl, 
+          &bob_identity.key,
+          &alice_identity.public,
+          &bob_handshake.key,
+          &alice_handshake.public, 
+          initial_ratchet
+        );
         let plaintext = PlainText::from_vec("Hello internet".to_string().into_bytes());
         let (msg, mac) = alice.encrypt(&base_impl,&plaintext);
         let reply = bob.decrypt(&base_impl, &msg,mac);
