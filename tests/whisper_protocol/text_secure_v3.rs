@@ -1,5 +1,5 @@
 extern crate raxolotl;
-pub use self::raxolotl::axolotl::{Axolotl,AxolotlMessage,KeyPair};
+pub use self::raxolotl::axolotl::{Axolotl,AxolotlMessageRef,KeyPair};
 
 use whisper_protocol::crypto_wrappers::{aes_cbc,curve25519,hkdf,hmac};
 
@@ -68,6 +68,17 @@ pub struct CipherTextAndVersion{
     version : u8,
 }
 
+pub struct Message {
+    pub message_number : usize,
+    pub ratchet_key : curve25519::PublicKey,
+    pub ciphertext : CipherTextAndVersion,
+}
+
+impl<'a> AxolotlMessageRef<TextSecureV3> for &'a Message {
+    type RatchetKey = &'a curve25519::PublicKey;
+    type CipherText = &'a CipherTextAndVersion;
+}
+
 impl Axolotl for TextSecureV3{
     type PrivateKey = curve25519::PrivateKey;
     type PublicKey  = curve25519::PublicKey;
@@ -79,6 +90,7 @@ impl Axolotl for TextSecureV3{
 
     type PlainText = PlainText;
     type CipherText = CipherTextAndVersion;
+    type Message = Message;
 
     type Mac = hmac::MacResult;
 
@@ -151,7 +163,7 @@ impl Axolotl for TextSecureV3{
 
     fn authenticate_message(
         &self,
-        message : &AxolotlMessage<Self>, 
+        message : &Self::Message, 
         message_key : &Self::MessageKey, 
         sender_identity : &Self::PublicKey, 
         receiver_identity : &Self::PublicKey
@@ -162,6 +174,29 @@ impl Axolotl for TextSecureV3{
         mac_state.input(receiver_identity.to_bytes());
         mac_state.input(&message.ciphertext.cipher_text[..]); //TODO: input the version
         hmac::truncate_mac_result(mac_state.result(), 8)
+    }
+
+    fn encode_header_and_ciphertext(
+        &self, 
+        message_number : usize, 
+        ratchet_key : Self::PublicKey, 
+        ciphertext : Self::CipherText
+    ) -> Self::Message {
+        Message {
+            message_number : message_number,
+            ratchet_key : ratchet_key,
+            ciphertext : ciphertext,
+        }
+    }
+
+    fn decode_header<'a>(&self, message : &'a Self::Message
+    ) -> (usize, &'a Self::PublicKey) {
+        (message.message_number, &message.ratchet_key)
+    }
+
+    fn decode_ciphertext<'a>(&self, message : &'a Self::Message
+    ) -> &'a Self::CipherText {
+        &message.ciphertext
     }
 
     fn ratchet_keys_are_equal(&self, key0 : &Self::PublicKey, key1 : &Self::PublicKey) -> bool{

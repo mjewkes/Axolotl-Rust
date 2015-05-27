@@ -1,6 +1,5 @@
+use std::borrow::Borrow;
 use std::option::{Option};
-
-use super::message::{AxolotlMessage};
 
 pub trait Axolotl {
     type PrivateKey : Clone;
@@ -13,6 +12,7 @@ pub trait Axolotl {
 
     type PlainText;
     type CipherText;
+    type Message;
 
     type Mac : PartialEq;
 
@@ -51,11 +51,24 @@ pub trait Axolotl {
 
     fn authenticate_message(
         &self,
-        message : &AxolotlMessage<Self>, 
+        message : &Self::Message, 
         message_key : &Self::MessageKey, 
         sender_identity : &Self::PublicKey, 
         receiver_identity : &Self::PublicKey)
     -> Self::Mac;
+
+    fn encode_header_and_ciphertext(
+        &self, 
+        message_number : usize, 
+        ratchet_key : Self::PublicKey, 
+        ciphertext : Self::CipherText
+    ) -> Self::Message;
+
+    fn decode_header<'a>(&self, message : &'a Self::Message
+    ) -> (usize, <&'a Self::Message as AxolotlMessageRef<Self>>::RatchetKey);
+
+    fn decode_ciphertext<'a>(&self, message : &'a Self::Message
+    ) -> <&'a Self::Message as AxolotlMessageRef<Self>>::CipherText;
 
     fn ratchet_keys_are_equal(
         &self,
@@ -76,6 +89,10 @@ pub trait Axolotl {
     fn skipped_chain_limit(&self) -> usize;
 }
 
+pub trait AxolotlMessageRef<T> where T:Axolotl {
+    type RatchetKey : Borrow<T::PublicKey>;
+    type CipherText : Borrow<T::CipherText>;
+}
 
 pub struct KeyPair<T> where T:Axolotl {
     pub key : T::PrivateKey,

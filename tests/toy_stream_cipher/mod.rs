@@ -21,6 +21,17 @@ fn next_rng() -> ChaChaRng {
 
 pub struct Substitution;
 
+pub struct Message {
+    pub message_number : usize,
+    pub ratchet_key : u64,
+    pub ciphertext : Vec<u8>,
+}
+
+impl<'a> AxolotlMessageRef<Substitution> for &'a Message {
+    type RatchetKey = &'a u64;
+    type CipherText = &'a Vec<u8>;
+}
+
 impl Axolotl for Substitution {
     type PrivateKey = u64;
     type PublicKey = u64;
@@ -32,6 +43,7 @@ impl Axolotl for Substitution {
 
     type PlainText = Vec<u8>;
     type CipherText = Vec<u8>;
+    type Message = Message;
 
     type Mac = ();
 
@@ -88,7 +100,30 @@ impl Axolotl for Substitution {
         Some(plaintext)
     }
 
-    fn authenticate_message(&self, _ : &AxolotlMessage<Substitution>, _ : &u64, _ : &u64, _ : &u64) {
+    fn encode_header_and_ciphertext(
+        &self, 
+        message_number : usize, 
+        ratchet_key : Self::PublicKey, 
+        ciphertext : Self::CipherText
+    ) -> Self::Message {
+        Message {
+            message_number : message_number,
+            ratchet_key : ratchet_key,
+            ciphertext : ciphertext,
+        }
+    }
+
+    fn decode_header<'a>(&self, message : &'a Self::Message
+    ) -> (usize, &'a Self::PublicKey) {
+        (message.message_number, &message.ratchet_key)
+    }
+
+    fn decode_ciphertext<'a>(&self, message : &'a Self::Message
+    ) -> &'a Self::CipherText {
+        &message.ciphertext
+    }
+
+    fn authenticate_message(&self, _ : &Self::Message, _ : &u64, _ : &u64, _ : &u64) {
     }
 
     fn ratchet_keys_are_equal(&self, a : &u64, b : &u64) -> bool {
@@ -151,7 +186,7 @@ pub fn init_alice_and_bob(axolotl_impl : &Substitution) -> (AxolotlState<Substit
     (alice,bob)
 }
 
-pub fn check_send(axolotl_impl : &Substitution, sender : &mut AxolotlState<Substitution>, receiver : &mut AxolotlState<Substitution>, message : String) -> AxolotlMessage<Substitution> {
+pub fn check_send(axolotl_impl : &Substitution, sender : &mut AxolotlState<Substitution>, receiver : &mut AxolotlState<Substitution>, message : String) -> Message {
     let m = message.into_bytes();
     let encrypted = sender.encrypt(axolotl_impl, &m);
     let decrypted = receiver.decrypt(axolotl_impl, &encrypted.0, encrypted.1).unwrap();
