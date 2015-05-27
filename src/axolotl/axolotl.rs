@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::option::{Option};
+use std::result::{Result};
 
 pub trait Axolotl {
     type PrivateKey : Clone;
@@ -47,7 +47,7 @@ pub trait Axolotl {
         &self,
         message_key : &Self::MessageKey,
         cyphertext : &Self::CipherText) 
-    -> Option<Self::PlainText>;
+    -> Result<Self::PlainText,()>;
 
     fn authenticate_message(
         &self,
@@ -65,10 +65,10 @@ pub trait Axolotl {
     ) -> Self::Message;
 
     fn decode_header<'a>(&self, message : &'a Self::Message
-    ) -> (usize, <&'a Self::Message as AxolotlMessageRef<Self>>::RatchetKey);
+    ) -> Result<(usize, <&'a Self::Message as AxolotlMessageRef<Self>>::RatchetKey),()>;
 
     fn decode_ciphertext<'a>(&self, message : &'a Self::Message
-    ) -> <&'a Self::Message as AxolotlMessageRef<Self>>::CipherText;
+    ) -> Result<<&'a Self::Message as AxolotlMessageRef<Self>>::CipherText,()>;
 
     fn ratchet_keys_are_equal(
         &self,

@@ -1,4 +1,5 @@
 use std::borrow::Borrow;
+use std::result::Result;
 use super::axolotl::{Axolotl, AxolotlMessageRef, KeyPair};
 
 pub struct AxolotlState<T> where T:Axolotl {
@@ -104,22 +105,22 @@ pub fn init_as_bob<T>(
 
 
 impl <T:Axolotl> ReceiveChain<T> {
-    fn try_get_message_key_index(&mut self, axolotl_impl : &T, index : usize) -> Option<usize> {
+    fn try_get_message_key_index(&mut self, axolotl_impl : &T, index : usize) -> Result<usize,()> {
         if index > axolotl_impl.chain_message_limit() {
-            return None;
+            return Err(());
         }
         //TODO: make sure this doesn't overflow
         if index > self.chain_key_index + axolotl_impl.future_message_limit() {
-            return None;
+            return Err(());
         }
         if index < self.chain_key_index {
             for i in 0..self.message_keys.len() {
                 let (chain_index, _) = self.message_keys[i];
                 if chain_index == index {
-                    return Some(i);
+                    return Ok(i);
                 }
             }
-            return None;
+            return Err(());
         }
 
         for i in self.chain_key_index..(index+1) {
@@ -129,7 +130,7 @@ impl <T:Axolotl> ReceiveChain<T> {
             self.chain_key_index += 1;
         }
 
-        return Some(self.message_keys.len()-1);
+        return Ok(self.message_keys.len()-1);
     }
 
     fn try_decrypt_with_message_key_index<'a> (
@@ -140,15 +141,15 @@ impl <T:Axolotl> ReceiveChain<T> {
         sender_identity : &T::PublicKey, 
         receiver_identity : &T::PublicKey,
         message_key_index : usize,
-    ) -> Option<T::PlainText> where &'a T::Message : AxolotlMessageRef<T> {
+    ) -> Result<T::PlainText,()> where &'a T::Message : AxolotlMessageRef<T> {
         let (_,ref message_key) = self.message_keys[message_key_index];
         let expected_mac = axolotl_impl.authenticate_message(message, message_key, sender_identity, receiver_identity);
         if expected_mac == mac {
-            let ciphertext = axolotl_impl.decode_ciphertext(message);
+            let ciphertext = try!(axolotl_impl.decode_ciphertext(message));
             axolotl_impl.decrypt_message(&message_key, ciphertext.borrow())
         }
         else {
-            None
+            Err(())
         }
     }
 
@@ -160,7 +161,7 @@ impl <T:Axolotl> ReceiveChain<T> {
         mac : T::Mac,
         sender_identity : &T::PublicKey, 
         receiver_identity : &T::PublicKey,
-    ) -> Option<T::PlainText> where &'a T::Message : AxolotlMessageRef<T> {
+    ) -> Result<T::PlainText,()> where &'a T::Message : AxolotlMessageRef<T> {
         self.try_get_message_key_index(axolotl_impl, message_number)
             .and_then(|message_key_index| {
                 let plaintext = self.try_decrypt_with_message_key_index(
@@ -171,7 +172,7 @@ impl <T:Axolotl> ReceiveChain<T> {
                     receiver_identity, 
                     message_key_index
                 );
-                if plaintext.is_some() {
+                if plaintext.is_ok() {
                     self.message_keys.remove(message_key_index);
                 }
                 plaintext
@@ -202,8 +203,8 @@ impl <T:Axolotl> AxolotlState<T> {
     }
 
     pub fn decrypt<'a>(&mut self, axolotl_impl : &T, message : &'a T::Message, mac : T::Mac
-    ) -> Option<T::PlainText> where &'a T::Message : AxolotlMessageRef<T> {
-        let (message_number, message_ratchet_key) = axolotl_impl.decode_header(message);
+    ) -> Result<T::PlainText,()> where &'a T::Message : AxolotlMessageRef<T> {
+        let (message_number, message_ratchet_key) = try!(axolotl_impl.decode_header(message));
         let receive_chain_position =  self.receive_chains.iter().position(
             | &ReceiveChain{ref ratchet_key, ..} | axolotl_impl.ratchet_keys_are_equal(ratchet_key, message_ratchet_key.borrow())
         );
@@ -227,7 +228,7 @@ impl <T:Axolotl> AxolotlState<T> {
         message_ratchet_key : &T::PublicKey,
         message : &'a T::Message, 
         mac : T::Mac
-    ) -> Option<T::PlainText>  where &'a T::Message : AxolotlMessageRef<T>{
+    ) -> Result<T::PlainText,()>  where &'a T::Message : AxolotlMessageRef<T>{
         let ratchet_key_derive_shared_secret = axolotl_impl.derive_shared_secret(&self.ratchet_key_send.key, message_ratchet_key);
         let (receiver_root_key, receiver_chain_key) = axolotl_impl.derive_next_root_key_and_chain_key(self.root_key.clone(), &ratchet_key_derive_shared_secret);
         let new_ratchet_key_send = axolotl_impl.generate_ratchet_key_pair();
@@ -243,7 +244,7 @@ impl <T:Axolotl> AxolotlState<T> {
         };
 
         let plaintext = new_receive_chain.try_decrypt(axolotl_impl, message_number, message, mac, &self.identity_key_local, &self.identity_key_remote);
-        if plaintext.is_some() {
+        if plaintext.is_ok() {
             self.receive_chains.insert(0, new_receive_chain);
             self.receive_chains.truncate(truncate_to);
             self.message_number_send = 0;

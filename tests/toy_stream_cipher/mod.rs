@@ -91,13 +91,13 @@ impl Axolotl for Substitution {
         &self,
         key : &u64,
         ciphertext : &Vec<u8>) 
-    -> Option<Vec<u8>> {
+    -> Result<Vec<u8>,()> {
         let mut rng = get_rng(*key);
         let plaintext = ciphertext
             .iter()
             .map(|b| {rng.gen::<u8>() ^ b})
             .collect();
-        Some(plaintext)
+        Ok(plaintext)
     }
 
     fn encode_header_and_ciphertext(
@@ -114,13 +114,13 @@ impl Axolotl for Substitution {
     }
 
     fn decode_header<'a>(&self, message : &'a Self::Message
-    ) -> (usize, &'a Self::PublicKey) {
-        (message.message_number, &message.ratchet_key)
+    ) -> Result<(usize, &'a Self::PublicKey),()> {
+        Ok((message.message_number, &message.ratchet_key))
     }
 
     fn decode_ciphertext<'a>(&self, message : &'a Self::Message
-    ) -> &'a Self::CipherText {
-        &message.ciphertext
+    ) -> Result<&'a Self::CipherText,()> {
+        Ok(&message.ciphertext)
     }
 
     fn authenticate_message(&self, _ : &Self::Message, _ : &u64, _ : &u64, _ : &u64) {

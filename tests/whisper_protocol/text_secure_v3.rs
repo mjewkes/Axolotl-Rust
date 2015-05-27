@@ -152,13 +152,13 @@ impl Axolotl for TextSecureV3{
         &self,
         message_key : &Self::MessageKey, 
         ciphertext : &Self::CipherText
-    ) -> Option<Self::PlainText>{
+    ) -> Result<Self::PlainText,()>{
         if ciphertext.version != 3 {
-            return None;
+            return Err(());
         }
 
         let result = aes_cbc::decrypt_aes256_cbc_mode(&ciphertext.cipher_text, message_key.cipher_key, message_key.iv);
-        Some(PlainText(result.into_boxed_slice()))
+        Ok(PlainText(result.into_boxed_slice()))
     }
 
     fn authenticate_message(
@@ -190,13 +190,13 @@ impl Axolotl for TextSecureV3{
     }
 
     fn decode_header<'a>(&self, message : &'a Self::Message
-    ) -> (usize, &'a Self::PublicKey) {
-        (message.message_number, &message.ratchet_key)
+    ) -> Result<(usize, &'a Self::PublicKey),()> {
+        Ok((message.message_number, &message.ratchet_key))
     }
 
     fn decode_ciphertext<'a>(&self, message : &'a Self::Message
-    ) -> &'a Self::CipherText {
-        &message.ciphertext
+    ) -> Result<&'a Self::CipherText,()> {
+        Ok(&message.ciphertext)
     }
 
     fn ratchet_keys_are_equal(&self, key0 : &Self::PublicKey, key1 : &Self::PublicKey) -> bool{
