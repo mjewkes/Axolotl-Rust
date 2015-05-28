@@ -94,6 +94,9 @@ impl Axolotl for TextSecureV3{
 
     type Mac = hmac::MacResult;
 
+    type DecryptError = ();
+    type DecodeError = ();
+
     /// Returns initial Root and Chain keys derived from initial the TripleDH handshake. 
     fn derive_initial_root_key_and_chain_key(
         &self,

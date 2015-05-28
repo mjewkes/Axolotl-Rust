@@ -47,6 +47,9 @@ impl Axolotl for Substitution {
 
     type Mac = ();
 
+    type DecryptError = ();
+    type DecodeError = ();
+
     fn derive_initial_root_key_and_chain_key(&self, a : &u64, b : &u64, c : &u64) -> (u64,u64) {
         let seed = *a ^ b.wrapping_mul(31) ^ c.wrapping_mul(31*31);
         let mut rng = get_rng(seed);

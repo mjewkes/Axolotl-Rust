@@ -1,4 +1,5 @@
 use std::borrow::Borrow;
+use std::fmt;
 use std::result::{Result};
 
 pub trait Axolotl {
@@ -16,6 +17,8 @@ pub trait Axolotl {
 
     type Mac : PartialEq;
 
+    type DecryptError : fmt::Debug;
+    type DecodeError : fmt::Debug;
 
     fn derive_initial_root_key_and_chain_key(
         &self,
@@ -47,7 +50,7 @@ pub trait Axolotl {
         &self,
         message_key : &Self::MessageKey,
         cyphertext : &Self::CipherText) 
-    -> Result<Self::PlainText,()>;
+    -> Result<Self::PlainText,Self::DecryptError>;
 
     fn authenticate_message(
         &self,
@@ -65,10 +68,10 @@ pub trait Axolotl {
     ) -> Self::Message;
 
     fn decode_header<'a>(&self, message : &'a Self::Message
-    ) -> Result<(usize, <&'a Self::Message as AxolotlMessageRef<Self>>::RatchetKey),()>;
+    ) -> Result<(usize, <&'a Self::Message as AxolotlMessageRef<Self>>::RatchetKey),Self::DecodeError>;
 
     fn decode_ciphertext<'a>(&self, message : &'a Self::Message
-    ) -> Result<<&'a Self::Message as AxolotlMessageRef<Self>>::CipherText,()>;
+    ) -> Result<<&'a Self::Message as AxolotlMessageRef<Self>>::CipherText,Self::DecodeError>;
 
     fn ratchet_keys_are_equal(
         &self,
@@ -92,6 +95,28 @@ pub trait Axolotl {
 pub trait AxolotlMessageRef<T> where T:Axolotl {
     type RatchetKey : Borrow<T::PublicKey>;
     type CipherText : Borrow<T::CipherText>;
+}
+
+pub enum ReceiveError<T> where T:Axolotl {
+    DecryptError(T::DecryptError),
+    DecodeError(T::DecodeError),
+    InvalidMac,
+    MessageNumberTooFarAhead(usize),
+    MessageNumberTooLarge(usize),
+    MessageNumberAlreadyUsed(usize),
+}
+
+impl<T> fmt::Debug for ReceiveError<T> where T:Axolotl {
+    fn fmt(&self, f : &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &ReceiveError::DecryptError(ref err) => write!(f, "DecryptError({:?})", err),
+            &ReceiveError::DecodeError(ref err) => write!(f, "DecodeError({:?})", err),
+            &ReceiveError::InvalidMac => write!(f, "InvalidMac"),
+            &ReceiveError::MessageNumberTooFarAhead(message_number) => write!(f, "MessageNumberTooFarAhead({:?})", message_number),
+            &ReceiveError::MessageNumberTooLarge(message_number) => write!(f, "MessageNumberTooLarge({:?})", message_number),
+            &ReceiveError::MessageNumberAlreadyUsed(message_number) => write!(f, "MessageNumberAlreadyUsed({:?})", message_number),
+        }
+    }
 }
 
 pub struct KeyPair<T> where T:Axolotl {
