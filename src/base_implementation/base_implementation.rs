@@ -8,8 +8,8 @@ use std::usize::MAX;
 macro_rules! to_array(
     ($arr:expr, $count:expr) => ( {
         let mut x : [u8;$count] = [0; $count];
-        for i in 0..$count {
-            x[i] = $arr[i];
+        for e in $arr.iter().zip(0..$count) {
+            x[e.1] = *e.0;
         }
         x
     });
