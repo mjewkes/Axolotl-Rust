@@ -1,6 +1,5 @@
 pub use axolotl::{self,Axolotl,AxolotlMessage,KeyPair};
 use crypto_wrappers::{hkdf,hmac};
-use std::ops::*;
 use std::usize::MAX;
 
 
@@ -15,29 +14,14 @@ macro_rules! to_array(
     });
 );
 
-macro_rules! derive_deref {
-    ($id:ident) => (
-        impl Deref for $id {
-            type Target = [u8;32];
-
-            fn deref<'a>(&'a self) -> &[u8;32]{
-                &self.0
-            }
-        }
-    )
-}
+#[derive(Clone)]
+pub struct PrivateKey{ key_bytes : [u8;KEY_LEN] }
 
 #[derive(Clone)]
-pub struct PrivateKey( [u8;KEY_LEN] );
-derive_deref!(PrivateKey);
+pub struct PublicKey{ key_bytes : [u8;KEY_LEN] }
 
 #[derive(Clone)]
-pub struct PublicKey( [u8;KEY_LEN] );
-derive_deref!(PublicKey);
-
-#[derive(Clone)]
-pub struct SharedKey( [u8;KEY_LEN] );
-derive_deref!(SharedKey);
+pub struct SharedKey{ key_bytes : [u8;KEY_LEN] }
 
 pub const KEY_LEN_CHAIN : usize = KEY_LEN;
 pub const KEY_LEN_ROOT  : usize = KEY_LEN;
@@ -95,23 +79,23 @@ impl<T:BaseImplementation> Axolotl for T {
             Some(val) => master_key.extend(val.iter().map(|&x| x)) // Can we remove and append Zero Bytes? 
         }
        
-        master_key.extend(local_identity_remote_handshake_dh_secret.iter().map(|&x| x));
-        master_key.extend(local_handshake_remote_identity_dh_secred.iter().map(|&x| x));
-        master_key.extend(local_handshake_remote_handshake_dh_secret.iter().map(|&x| x));
+        master_key.extend(local_identity_remote_handshake_dh_secret.key_bytes.iter().map(|&x| x));
+        master_key.extend(local_handshake_remote_identity_dh_secred.key_bytes.iter().map(|&x| x));
+        master_key.extend(local_handshake_remote_handshake_dh_secret.key_bytes.iter().map(|&x| x));
 
         let (rk, ck) = keys_from_kdf(&master_key[..], self.kdf_info_init().as_bytes(),&SEED_NULL);
-        (RootKey(rk),ChainKey(ck))
+        (RootKey { key_bytes : rk },ChainKey { key_bytes : ck })
     }
 
     // This is the DH future secrecy ratchet/
     fn derive_next_root_key_and_chain_key(
         &self,
-        RootKey(root_bytes) : Self::RootKey, 
+        RootKey { key_bytes : root_bytes } : Self::RootKey, 
         ratchet : &Self::SharedSecret
     ) -> (Self::RootKey, Self::ChainKey){
-        let ikm = **ratchet;
-        let (rk,ck) = keys_from_kdf(&ikm,self.kdf_info_ratchet().as_bytes(),&root_bytes);
-        (RootKey(rk),ChainKey(ck))
+        let ikm = &ratchet.key_bytes;
+        let (rk,ck) = keys_from_kdf(ikm,self.kdf_info_ratchet().as_bytes(),&root_bytes);
+        (RootKey { key_bytes : rk },ChainKey { key_bytes : ck })
     }
 
     //This is the SCIMP style forward secrecy chain key iteration.
@@ -130,8 +114,7 @@ impl<T:BaseImplementation> Axolotl for T {
         plaintext : &Self::PlainText
     ) -> Self::CipherText{
         
-        let PlainText(ref text) = *plaintext;
-        let ciphertext = self.enc_bytes(text,message_key.cipher_key, message_key.iv);
+        let ciphertext = self.enc_bytes(&plaintext.text,message_key.cipher_key, message_key.iv);
         CipherTextAndVersion {
             version : 3,
             cipher_text : ciphertext.into_boxed_slice(),
@@ -149,7 +132,7 @@ impl<T:BaseImplementation> Axolotl for T {
         }
 
         let result = self.dec_bytes(&ciphertext.cipher_text, message_key.cipher_key, message_key.iv);
-        Some(PlainText(result.into_boxed_slice()))
+        Some(PlainText { text : result.into_boxed_slice() })
     }
 
     fn authenticate_message(
@@ -161,8 +144,8 @@ impl<T:BaseImplementation> Axolotl for T {
     ) -> Self::Mac{
   
         let mut mac_state = hmac::HmacSha256::new(&message_key.mac_key);    // TODO: Need Discussion about if we want this to be configurable
-        mac_state.input(&**sender_identity);                                // By calling out to a function with the MacKey+args or if we want 
-        mac_state.input(&**receiver_identity);                              // to fix format/MAC
+        mac_state.input(&sender_identity.key_bytes);                                // By calling out to a function with the MacKey+args or if we want 
+        mac_state.input(&receiver_identity.key_bytes);                              // to fix format/MAC
         mac_state.input(&message.ciphertext.cipher_text[..]); //TODO: input the version
         hmac::truncate_mac_result(mac_state.result(), 8)
     }
@@ -172,26 +155,26 @@ impl<T:BaseImplementation> Axolotl for T {
         key0 : &Self::PublicKey, 
         key1 : &Self::PublicKey
     ) -> bool{
-        &(*key0)[..] ==  &(*key1)[..]
+        key0.key_bytes[..] == key1.key_bytes[..]
     }
 
     fn generate_ratchet_key_pair(&self) -> KeyPair<Self>{
         let (private_bytes,public_bytes) = self.gen_key_pair();
 
         KeyPair{
-            key: PrivateKey(private_bytes), 
-            public: PublicKey(public_bytes)
+            key: PrivateKey { key_bytes : private_bytes }, 
+            public: PublicKey { key_bytes : public_bytes }
         }
 
     }
 
     fn derive_shared_secret(&self, key : &Self::PrivateKey, public : &Self::PublicKey) -> Self::SharedSecret{
-        SharedKey(self.dh_key_exchange(**key,**public))
+        SharedKey { key_bytes : self.dh_key_exchange(key.key_bytes,public.key_bytes) }
     }
 
     fn derive_public_key(&self, key : &Self::PrivateKey) -> Self::PublicKey{
-        let public = self.gen_pub_key(**key);
-        PublicKey(public)
+        let public = self.gen_pub_key(key.key_bytes);
+        PublicKey { key_bytes : public }
     }
 
     fn future_message_limit(&self) -> usize{
@@ -209,19 +192,18 @@ impl<T:BaseImplementation> Axolotl for T {
 
 
 #[derive(Clone)]
-pub struct RootKey ([u8;32]);
+pub struct RootKey { key_bytes : [u8;32] }
 
 #[derive(Clone)]
-pub struct ChainKey ([u8;KEY_LEN_CHAIN]);
+pub struct ChainKey { key_bytes : [u8;KEY_LEN_CHAIN] }
 
 impl ChainKey {
     fn next(self : &Self) -> ChainKey {
-        ChainKey(self.hmac(&SEED_CHAIN_KEY))
+        ChainKey { key_bytes : self.hmac(&SEED_CHAIN_KEY) }
     }
 
     fn hmac(self : &Self, seed : &[u8] ) -> [u8;KEY_LEN_CHAIN] {  
-        let ChainKey(key_bytes) = *self;  
-        let mut hmac_context = hmac::HmacSha256::new(&key_bytes);
+        let mut hmac_context = hmac::HmacSha256::new(&self.key_bytes);
         hmac_context.input(seed);                           
         to_array!(hmac_context.result().code()[..],KEY_LEN_CHAIN)
     }
@@ -234,11 +216,11 @@ pub struct MessageKey{
     iv : [u8;16],
 }
 
-pub struct PlainText(pub Box<[u8]>);
+pub struct PlainText { pub text : Box<[u8]> }
 
 impl PlainText {
     pub fn from_vec(data : Vec<u8>) -> PlainText {
-        PlainText(data.into_boxed_slice())
+        PlainText { text : data.into_boxed_slice() }
     }
 }
 
@@ -293,8 +275,8 @@ mod tests {
 
     pub fn dhkey_pair(s : &TestImpl) -> KeyPair<TestImpl> {
         let (private,public)    = s.gen_key_pair();
-        let priv_key            = PrivateKey(private);
-        let pub_key             = PublicKey(public);
+        let priv_key            = PrivateKey { key_bytes : private };
+        let pub_key             = PublicKey { key_bytes : public };
 
         KeyPair{ key :priv_key, public : pub_key}
     } 
@@ -374,7 +356,7 @@ mod tests {
         
         let reply = match reply{
             None => panic!(),
-            Some(r) => {assert_eq!(plaintext.0 , r.0); r}
+            Some(r) => {assert_eq!(plaintext.text , r.text); r}
         };
  
         let (echo, echo_mac) = bob.encrypt(&base_impl,&reply);
@@ -382,7 +364,7 @@ mod tests {
 
         match echo_msg{
             None => panic!(),
-            Some(e) => assert_eq!(plaintext.0,e.0)
+            Some(e) => assert_eq!(plaintext.text,e.text)
         }
 
     }
