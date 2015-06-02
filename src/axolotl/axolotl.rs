@@ -62,13 +62,14 @@ pub trait Axolotl {
 
     fn encode_header_and_ciphertext(
         &self, 
-        message_number : usize, 
+        message_number : usize,
+        message_number_prev : usize,
         ratchet_key : Self::PublicKey, 
         ciphertext : Self::CipherText
     ) -> Self::Message;
 
     fn decode_header<'a>(&self, message : &'a Self::Message
-    ) -> Result<(usize, <&'a Self::Message as AxolotlMessageRef<Self>>::RatchetKey),Self::DecodeError>;
+    ) -> Result<(usize, usize, <&'a Self::Message as AxolotlMessageRef<Self>>::RatchetKey),Self::DecodeError>;
 
     fn decode_ciphertext<'a>(&self, message : &'a Self::Message
     ) -> Result<<&'a Self::Message as AxolotlMessageRef<Self>>::CipherText,Self::DecodeError>;
@@ -103,6 +104,7 @@ pub enum ReceiveError<T> where T:Axolotl {
     InvalidMac,
     MessageNumberTooFarAhead(usize),
     MessageNumberTooLarge(usize),
+    MessageNumberAheadOfChainLength(usize),
     MessageNumberAlreadyUsed(usize),
 }
 
@@ -114,6 +116,7 @@ impl<T> fmt::Debug for ReceiveError<T> where T:Axolotl {
             &ReceiveError::InvalidMac => write!(f, "InvalidMac"),
             &ReceiveError::MessageNumberTooFarAhead(message_number) => write!(f, "MessageNumberTooFarAhead({:?})", message_number),
             &ReceiveError::MessageNumberTooLarge(message_number) => write!(f, "MessageNumberTooLarge({:?})", message_number),
+            &ReceiveError::MessageNumberAheadOfChainLength(message_number) => write!(f, "MessageNumberAheadOfChainLength({:?})", message_number),
             &ReceiveError::MessageNumberAlreadyUsed(message_number) => write!(f, "MessageNumberAlreadyUsed({:?})", message_number),
         }
     }
