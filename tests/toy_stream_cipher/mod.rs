@@ -23,6 +23,7 @@ pub struct Substitution;
 
 pub struct Message {
     pub message_number : usize,
+    pub message_number_prev : usize,
     pub ratchet_key : u64,
     pub ciphertext : Vec<u8>,
 }
@@ -105,20 +106,22 @@ impl Axolotl for Substitution {
 
     fn encode_header_and_ciphertext(
         &self, 
-        message_number : usize, 
+        message_number : usize,
+        message_number_prev : usize,
         ratchet_key : Self::PublicKey, 
         ciphertext : Self::CipherText
     ) -> Self::Message {
         Message {
             message_number : message_number,
+            message_number_prev : message_number_prev,
             ratchet_key : ratchet_key,
             ciphertext : ciphertext,
         }
     }
 
     fn decode_header<'a>(&self, message : &'a Self::Message
-    ) -> Result<(usize, &'a Self::PublicKey),()> {
-        Ok((message.message_number, &message.ratchet_key))
+    ) -> Result<(usize, usize, &'a Self::PublicKey),()> {
+        Ok((message.message_number, message.message_number_prev, &message.ratchet_key))
     }
 
     fn decode_ciphertext<'a>(&self, message : &'a Self::Message
