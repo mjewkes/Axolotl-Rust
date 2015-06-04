@@ -42,13 +42,13 @@ pub trait Axolotl {
     fn encrypt_message(
         &self,
         message_key : &Self::MessageKey,
-        plaintext : &Self::PlainText) 
+        plaintext : Self::PlainText) 
     -> Self::CipherText;
 
     fn decrypt_message(
         &self,
         message_key : &Self::MessageKey,
-        cyphertext : &Self::CipherText) 
+        cyphertext : Self::CipherText) 
     -> Result<Self::PlainText,Self::DecryptError>;
 
     fn authenticate_message(

@@ -12,12 +12,12 @@ fn dynamic_roundtrip_echo(){
     let msg = PlainText::from_vec("hello goat!".to_string().into_bytes());
 
     for __ in 0..10 {
-        let (wm, mac) = alice.encrypt(axolotl_impl, &msg);
+        let (wm, mac) = alice.encrypt(axolotl_impl, msg.clone());
         let plaintext = bob.decrypt(axolotl_impl, wm,mac).ok().unwrap();
 
         assert_eq!(msg.0 , plaintext.0);
 
-        let (wmb, macb) = bob.encrypt(axolotl_impl, &plaintext);
+        let (wmb, macb) = bob.encrypt(axolotl_impl, plaintext);
         let reply = alice.decrypt(axolotl_impl, wmb,macb).ok().unwrap();
 
         assert_eq!(msg.0,reply.0);
@@ -126,7 +126,7 @@ fn android_session_kat () {
     let a_plain = PlainText::from_vec(alice_plaintext.to_vec());
 
 
-    let (alice_cipher_msg,ab_mac) = alice.encrypt(axolotl_impl, &a_plain);
+    let (alice_cipher_msg,ab_mac) = alice.encrypt(axolotl_impl, a_plain);
     assert_eq!(&alice_cipher_msg.ciphertext.cipher_text[..], &alice_cipher_text[..]);
 
    
@@ -136,14 +136,14 @@ fn android_session_kat () {
     for i in 0 .. 100{
         let message = [i;78];
 
-        let (c,m) = alice.encrypt(axolotl_impl, &PlainText::from_vec(message.to_vec()));      
+        let (c,m) = alice.encrypt(axolotl_impl, PlainText::from_vec(message.to_vec()));      
         assert_eq!(&message[..], &bob.decrypt(axolotl_impl, c,m).ok().unwrap().0.to_vec()[..] );
     }
 
     for i in 0 .. 100{
         let message = [i;1802];
 
-        let (c,m) = bob.encrypt(axolotl_impl, &PlainText::from_vec(message.to_vec()));
+        let (c,m) = bob.encrypt(axolotl_impl, PlainText::from_vec(message.to_vec()));
         assert_eq!(&message[..], &alice.decrypt(axolotl_impl, c,m).ok().unwrap().0.to_vec()[..] );
     }
 }

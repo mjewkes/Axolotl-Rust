@@ -165,7 +165,7 @@ impl <T:Axolotl> ReceiveChain<T> {
         let expected_mac = axolotl_impl.authenticate_message(&message, message_key, sender_identity, receiver_identity);
         if &expected_mac == mac {
             let ciphertext = try!(axolotl_impl.decode_ciphertext(message).map_err(|e|{ReceiveError::DecodeError(e)}));
-            axolotl_impl.decrypt_message(&message_key, ciphertext.borrow()).map_err(|e|{ReceiveError::DecryptError(e)})
+            axolotl_impl.decrypt_message(&message_key, ciphertext).map_err(|e|{ReceiveError::DecryptError(e)})
         }
         else {
             Err(ReceiveError::InvalidMac)
@@ -200,14 +200,14 @@ impl <T:Axolotl> ReceiveChain<T> {
 }
 impl <T:Axolotl> AxolotlState<T> {
 
-    pub fn encrypt(&mut self, axolotl_impl : &T, plaintext : &T::PlainText) -> (T::Message, T::Mac) {
+    pub fn encrypt(&mut self, axolotl_impl : &T, plaintext : T::PlainText) -> (T::Message, T::Mac) {
         let (new_chain_key,result) = self.encrypt_and_get_next_chain_key(axolotl_impl, plaintext);
         self.chain_key_send = new_chain_key;
         self.message_number_send += 1;
         result
     }
 
-    fn encrypt_and_get_next_chain_key(&self, axolotl_impl : &T, plaintext : &T::PlainText) -> (T::ChainKey, (T::Message, T::Mac)) {
+    fn encrypt_and_get_next_chain_key(&self, axolotl_impl : &T, plaintext : T::PlainText) -> (T::ChainKey, (T::Message, T::Mac)) {
         let (new_chain_key, message_key) = axolotl_impl.derive_next_chain_and_message_key(&self.chain_key_send);
         let ciphertext = axolotl_impl.encrypt_message(&message_key, plaintext);
 
