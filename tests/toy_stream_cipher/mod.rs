@@ -21,16 +21,12 @@ fn next_rng() -> ChaChaRng {
 
 pub struct Substitution;
 
+#[derive(Clone)]
 pub struct Message {
     pub message_number : usize,
     pub message_number_prev : usize,
     pub ratchet_key : u64,
     pub ciphertext : Vec<u8>,
-}
-
-impl<'a> AxolotlMessageRef<Substitution> for &'a Message {
-    type RatchetKey = &'a u64;
-    type CipherText = &'a Vec<u8>;
 }
 
 impl Axolotl for Substitution {
@@ -105,28 +101,30 @@ impl Axolotl for Substitution {
     }
 
     fn encode_header_and_ciphertext(
-        &self, 
-        message_number : usize,
-        message_number_prev : usize,
-        ratchet_key : Self::PublicKey, 
+        &self,
+        header : Header<Self>,
         ciphertext : Self::CipherText
     ) -> Self::Message {
         Message {
-            message_number : message_number,
-            message_number_prev : message_number_prev,
-            ratchet_key : ratchet_key,
+            message_number : header.message_number,
+            message_number_prev : header.message_number_prev,
+            ratchet_key : header.ratchet_key,
             ciphertext : ciphertext,
         }
     }
 
-    fn decode_header<'a>(&self, message : &'a Self::Message
-    ) -> Result<(usize, usize, &'a Self::PublicKey),()> {
-        Ok((message.message_number, message.message_number_prev, &message.ratchet_key))
+    fn decode_header(&self, message : &Self::Message
+    ) -> Result<Header<Self>,Self::DecodeError> {
+        Ok(Header{ 
+            message_number : message.message_number, 
+            message_number_prev : message.message_number_prev, 
+            ratchet_key : message.ratchet_key,
+        })
     }
 
-    fn decode_ciphertext<'a>(&self, message : &'a Self::Message
-    ) -> Result<&'a Self::CipherText,()> {
-        Ok(&message.ciphertext)
+    fn decode_ciphertext(&self, message : Self::Message
+    ) -> Result<Self::CipherText,()> {
+        Ok(message.ciphertext)
     }
 
     fn authenticate_message(&self, _ : &Self::Message, _ : &u64, _ : &u64, _ : &u64) {
@@ -195,7 +193,7 @@ pub fn init_alice_and_bob(axolotl_impl : &Substitution) -> (AxolotlState<Substit
 pub fn check_send(axolotl_impl : &Substitution, sender : &mut AxolotlState<Substitution>, receiver : &mut AxolotlState<Substitution>, message : String) -> Message {
     let m = message.into_bytes();
     let encrypted = sender.encrypt(axolotl_impl, &m);
-    let decrypted = receiver.decrypt(axolotl_impl, &encrypted.0, encrypted.1).unwrap();
+    let decrypted = receiver.decrypt(axolotl_impl, encrypted.0.clone(), encrypted.1).unwrap();
     assert!(m[..] == decrypted[..]);
     assert!(m[..] != encrypted.0.ciphertext[..]);
     encrypted.0

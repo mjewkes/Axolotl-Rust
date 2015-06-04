@@ -1,5 +1,5 @@
 extern crate raxolotl;
-pub use self::raxolotl::axolotl::{Axolotl,AxolotlMessageRef,KeyPair};
+pub use self::raxolotl::axolotl::{Axolotl,Header,KeyPair};
 
 use whisper_protocol::crypto_wrappers::{aes_cbc,curve25519,hkdf,hmac};
 
@@ -63,21 +63,18 @@ impl PlainText {
     }
 }
 
+#[derive(Clone)]
 pub struct CipherTextAndVersion{
-    pub cipher_text : Box<[u8]>,
+    pub cipher_text : Vec<u8>,
     version : u8,
 }
 
+#[derive(Clone)]
 pub struct Message {
     pub message_number : usize,
     pub message_number_prev : usize,
     pub ratchet_key : curve25519::PublicKey,
     pub ciphertext : CipherTextAndVersion,
-}
-
-impl<'a> AxolotlMessageRef<TextSecureV3> for &'a Message {
-    type RatchetKey = &'a curve25519::PublicKey;
-    type CipherText = &'a CipherTextAndVersion;
 }
 
 impl Axolotl for TextSecureV3{
@@ -107,7 +104,7 @@ impl Axolotl for TextSecureV3{
     ) -> (Self::RootKey, Self::ChainKey){
 
         let disconuity_bytes = curve25519::SharedKey::from_bytes([0xFF;32]);
-        let mut master_key : Vec<u8> = [ &disconuity_bytes, local_identity_remote_handshake_dh_secret,
+        let master_key : Vec<u8> = [ &disconuity_bytes, local_identity_remote_handshake_dh_secret,
                             local_handshake_remote_identity_dh_secred,
                             local_handshake_remote_handshake_dh_secret]
                             .iter()
@@ -148,7 +145,7 @@ impl Axolotl for TextSecureV3{
         
         CipherTextAndVersion {
             version : 3,
-            cipher_text : ciphertext.into_boxed_slice(),
+            cipher_text : ciphertext,
         }
     }
 
@@ -181,28 +178,30 @@ impl Axolotl for TextSecureV3{
     }
 
     fn encode_header_and_ciphertext(
-        &self, 
-        message_number : usize, 
-        message_number_prev : usize, 
-        ratchet_key : Self::PublicKey, 
+        &self,
+        header : Header<Self>,
         ciphertext : Self::CipherText
     ) -> Self::Message {
         Message {
-            message_number : message_number,
-            message_number_prev : message_number_prev,
-            ratchet_key : ratchet_key,
+            message_number : header.message_number,
+            message_number_prev : header.message_number_prev,
+            ratchet_key : header.ratchet_key,
             ciphertext : ciphertext,
         }
     }
 
-    fn decode_header<'a>(&self, message : &'a Self::Message
-    ) -> Result<(usize, usize, &'a Self::PublicKey),()> {
-        Ok((message.message_number, message.message_number_prev, &message.ratchet_key))
+    fn decode_header(&self, message : &Self::Message
+    ) -> Result<Header<Self>,Self::DecodeError> {
+        Ok(Header{ 
+            message_number : message.message_number, 
+            message_number_prev : message.message_number_prev, 
+            ratchet_key : message.ratchet_key.clone(),
+        })
     }
 
-    fn decode_ciphertext<'a>(&self, message : &'a Self::Message
-    ) -> Result<&'a Self::CipherText,()> {
-        Ok(&message.ciphertext)
+    fn decode_ciphertext(&self, message : Self::Message
+    ) -> Result<Self::CipherText,()> {
+        Ok(message.ciphertext)
     }
 
     fn ratchet_keys_are_equal(&self, key0 : &Self::PublicKey, key1 : &Self::PublicKey) -> bool{

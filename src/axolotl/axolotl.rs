@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::fmt;
 use std::result::{Result};
 
@@ -61,18 +60,16 @@ pub trait Axolotl {
     -> Self::Mac;
 
     fn encode_header_and_ciphertext(
-        &self, 
-        message_number : usize,
-        message_number_prev : usize,
-        ratchet_key : Self::PublicKey, 
+        &self,
+        header : Header<Self>,
         ciphertext : Self::CipherText
     ) -> Self::Message;
 
-    fn decode_header<'a>(&self, message : &'a Self::Message
-    ) -> Result<(usize, usize, <&'a Self::Message as AxolotlMessageRef<Self>>::RatchetKey),Self::DecodeError>;
+    fn decode_header(&self, message : &Self::Message
+    ) -> Result<Header<Self>,Self::DecodeError>;
 
-    fn decode_ciphertext<'a>(&self, message : &'a Self::Message
-    ) -> Result<<&'a Self::Message as AxolotlMessageRef<Self>>::CipherText,Self::DecodeError>;
+    fn decode_ciphertext(&self, message : Self::Message
+    ) -> Result<Self::CipherText,Self::DecodeError>;
 
     fn ratchet_keys_are_equal(
         &self,
@@ -91,11 +88,6 @@ pub trait Axolotl {
     fn chain_message_limit(&self) -> usize;
 
     fn skipped_chain_limit(&self) -> usize;
-}
-
-pub trait AxolotlMessageRef<T> where T:Axolotl {
-    type RatchetKey : Borrow<T::PublicKey>;
-    type CipherText : Borrow<T::CipherText>;
 }
 
 pub enum ReceiveError<T> where T:Axolotl {
@@ -125,6 +117,12 @@ impl<T> fmt::Debug for ReceiveError<T> where T:Axolotl {
 pub struct KeyPair<T> where T:Axolotl {
     pub key : T::PrivateKey,
     pub public : T::PublicKey,
+}
+
+pub struct Header<T> where T:Axolotl {
+    pub message_number : usize,
+    pub message_number_prev : usize,
+    pub ratchet_key : T::PublicKey,
 }
 
 impl <T:Axolotl> Clone for KeyPair<T> {
