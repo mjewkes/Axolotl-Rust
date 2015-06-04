@@ -77,7 +77,7 @@ impl Axolotl for Substitution {
     fn encrypt_message(
         &self,
         key : &u64,
-        plaintext : &Vec<u8>) 
+        plaintext : Vec<u8>) 
     -> Vec<u8> {
         let mut rng = get_rng(*key);
         plaintext
@@ -90,7 +90,7 @@ impl Axolotl for Substitution {
     fn decrypt_message(
         &self,
         key : &u64,
-        ciphertext : &Vec<u8>) 
+        ciphertext : Vec<u8>) 
     -> Result<Vec<u8>,()> {
         let mut rng = get_rng(*key);
         let plaintext = ciphertext
@@ -192,7 +192,7 @@ pub fn init_alice_and_bob(axolotl_impl : &Substitution) -> (AxolotlState<Substit
 
 pub fn check_send(axolotl_impl : &Substitution, sender : &mut AxolotlState<Substitution>, receiver : &mut AxolotlState<Substitution>, message : String) -> Message {
     let m = message.into_bytes();
-    let encrypted = sender.encrypt(axolotl_impl, &m);
+    let encrypted = sender.encrypt(axolotl_impl, m.clone());
     let decrypted = receiver.decrypt(axolotl_impl, encrypted.0.clone(), encrypted.1).unwrap();
     assert!(m[..] == decrypted[..]);
     assert!(m[..] != encrypted.0.ciphertext[..]);
