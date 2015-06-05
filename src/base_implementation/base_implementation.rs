@@ -45,9 +45,9 @@ pub trait BaseImplementation {
 
     fn get_masterkey_prefix(self: &Self) -> Option<[u8;KEY_LEN]>;
 
-    fn kdf_info_init(self: &Self) ->  String;
-    fn kdf_info_ratchet(self: &Self) ->  String;
-    fn kdf_info_msg(self: &Self) ->  String;
+    fn kdf_info_init(self: &Self) ->  &[u8];
+    fn kdf_info_ratchet(self: &Self) ->  &[u8];
+    fn kdf_info_msg(self: &Self) ->  &[u8];
 
 }
 
@@ -83,7 +83,7 @@ impl<T:BaseImplementation> Axolotl for T {
         master_key.extend(local_handshake_remote_identity_dh_secred.key_bytes.iter().map(|&x| x));
         master_key.extend(local_handshake_remote_handshake_dh_secret.key_bytes.iter().map(|&x| x));
 
-        let (rk, ck) = keys_from_kdf(&master_key[..], self.kdf_info_init().as_bytes(),&SEED_NULL);
+        let (rk, ck) = keys_from_kdf(&master_key[..], self.kdf_info_init(),&SEED_NULL);
         (RootKey { key_bytes : rk },ChainKey { key_bytes : ck })
     }
 
@@ -94,7 +94,7 @@ impl<T:BaseImplementation> Axolotl for T {
         ratchet : &Self::SharedSecret
     ) -> (Self::RootKey, Self::ChainKey){
         let ikm = &ratchet.key_bytes;
-        let (rk,ck) = keys_from_kdf(ikm,self.kdf_info_ratchet().as_bytes(),&root_bytes);
+        let (rk,ck) = keys_from_kdf(ikm,self.kdf_info_ratchet(),&root_bytes);
         (RootKey { key_bytes : rk },ChainKey { key_bytes : ck })
     }
 
@@ -104,7 +104,7 @@ impl<T:BaseImplementation> Axolotl for T {
         chain_key : &Self::ChainKey
     ) -> (Self::ChainKey, Self::MessageKey){
         let ikm = chain_key.hmac( &SEED_MSG_KEY ); 
-        let msg_key = generate_message_key(&ikm,self.kdf_info_msg().as_bytes(),&SEED_NULL);
+        let msg_key = generate_message_key(&ikm,self.kdf_info_msg(),&SEED_NULL);
         (chain_key.next(),msg_key)
     }
 
@@ -312,14 +312,14 @@ mod tests {
             Some([0xFF;KEY_LEN])
         }
 
-        fn kdf_info_init(self: &Self) ->  String {
-            "WhisperText".to_string()
+        fn kdf_info_init(self: &Self) ->  &[u8] {
+            b"WhisperText"
         }
-        fn kdf_info_ratchet(self: &Self) ->  String{
-            "WhisperRatchet".to_string()
+        fn kdf_info_ratchet(self: &Self) -> &[u8]{
+            b"WhisperRatchet"
         }
-        fn kdf_info_msg(self: &Self) ->  String{
-            "WhisperMessageKeys".to_string()
+        fn kdf_info_msg(self: &Self) ->  &[u8]{
+            b"WhisperMessageKeys"
         }
     }
 

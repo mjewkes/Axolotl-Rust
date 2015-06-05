@@ -1,3 +1,5 @@
+#![feature(alloc)]
+
 extern crate crypto;
 extern crate rand;
 
