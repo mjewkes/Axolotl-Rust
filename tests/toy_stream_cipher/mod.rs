@@ -34,6 +34,9 @@ impl Axolotl for Substitution {
     type PublicKey = u64;
     type SharedSecret = u64;
 
+    type InitialSharedSecret = u64;
+    type SessionIdentity = ();
+
     type RootKey = u64;
     type ChainKey = u64;
     type MessageKey = u64;
@@ -47,9 +50,8 @@ impl Axolotl for Substitution {
     type DecryptError = ();
     type DecodeError = ();
 
-    fn derive_initial_root_key_and_chain_key(&self, a : &u64, b : &u64, c : &u64) -> (u64,u64) {
-        let seed = *a ^ b.wrapping_mul(31) ^ c.wrapping_mul(31*31);
-        let mut rng = get_rng(seed);
+    fn derive_initial_root_key_and_chain_key(&self, secret : u64) -> (u64,u64) {
+        let mut rng = get_rng(secret);
         let root_key = rng.next_u64();
         let chain_key = rng.next_u64();
         (root_key,chain_key)
@@ -127,7 +129,7 @@ impl Axolotl for Substitution {
         Ok(message.ciphertext)
     }
 
-    fn authenticate_message(&self, _ : &Self::Message, _ : &u64, _ : &u64, _ : &u64) {
+    fn authenticate_message(&self, _ : &Self::Message, _ : &u64, _ : &()) {
     }
 
     fn ratchet_keys_are_equal(&self, a : &u64, b : &u64) -> bool {
@@ -164,26 +166,20 @@ impl Axolotl for Substitution {
 }
 
 pub fn init_alice_and_bob(axolotl_impl : &Substitution) -> (AxolotlState<Substitution>, AxolotlState<Substitution>) {
-    let alice_identity = axolotl_impl.generate_ratchet_key_pair();
-    let alice_handshake = axolotl_impl.generate_ratchet_key_pair();
-    let bob_identity = axolotl_impl.generate_ratchet_key_pair();
-    let bob_handshake = axolotl_impl.generate_ratchet_key_pair();
     let initial_ratchet = axolotl_impl.generate_ratchet_key_pair();
 
+    let initial_shared_secret = next_rng().next_u64();
+
     let alice = init_as_alice::<Substitution>(
-        axolotl_impl, 
-        &alice_identity.key, 
-        &bob_identity.public,
-        &alice_handshake.key,
-        &bob_handshake.public, 
-        &initial_ratchet.public
+        axolotl_impl,
+        (),
+        initial_shared_secret,
+        initial_ratchet.public
     );
     let bob = init_as_bob::<Substitution>(
         axolotl_impl,
-        &bob_identity.key,
-        &alice_identity.public,
-        &bob_handshake.key,
-        &alice_handshake.public,
+        (),
+        initial_shared_secret,
         initial_ratchet
     );
 

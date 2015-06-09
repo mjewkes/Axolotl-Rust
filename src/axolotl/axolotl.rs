@@ -5,6 +5,8 @@ pub trait Axolotl {
     type PrivateKey : Clone;
     type PublicKey : Clone;
     type SharedSecret : Clone;
+    type InitialSharedSecret;
+    type SessionIdentity;
 
     type RootKey : Clone;
     type ChainKey : Clone;
@@ -20,10 +22,7 @@ pub trait Axolotl {
     type DecodeError : fmt::Debug;
 
     fn derive_initial_root_key_and_chain_key(
-        &self,
-        local_identity_remote_handshake_dh_secret : &Self::SharedSecret, 
-        local_handshake_remote_identity_dh_secred : &Self::SharedSecret, 
-        local_handshake_remote_handshake_dh_secret : &Self::SharedSecret) 
+        &self, Self::InitialSharedSecret) 
     -> (Self::RootKey, Self::ChainKey);
 
     // This is the DH future secrecy ratchet/
@@ -54,9 +53,8 @@ pub trait Axolotl {
     fn authenticate_message(
         &self,
         message : &Self::Message, 
-        message_key : &Self::MessageKey, 
-        sender_identity : &Self::PublicKey, 
-        receiver_identity : &Self::PublicKey)
+        message_key : &Self::MessageKey,
+        identity : &Self::SessionIdentity)
     -> Self::Mac;
 
     fn encode_header_and_ciphertext(

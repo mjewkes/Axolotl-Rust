@@ -83,6 +83,9 @@ impl Axolotl for TextSecureV3{
     type PublicKey  = curve25519::PublicKey;
     type SharedSecret  = curve25519::SharedKey;
 
+    type InitialSharedSecret = Vec<u8>;
+    type SessionIdentity = Vec<u8>;
+
     type RootKey = Rootkey;
     type ChainKey = ChainKey;
     type MessageKey = MessageKey;
@@ -99,20 +102,10 @@ impl Axolotl for TextSecureV3{
     /// Returns initial Root and Chain keys derived from initial the TripleDH handshake. 
     fn derive_initial_root_key_and_chain_key(
         &self,
-        local_identity_remote_handshake_dh_secret : &Self::SharedSecret, 
-        local_handshake_remote_identity_dh_secred : &Self::SharedSecret, 
-        local_handshake_remote_handshake_dh_secret : &Self::SharedSecret
+        initial_secret : Self::InitialSharedSecret
     ) -> (Self::RootKey, Self::ChainKey){
 
-        let disconuity_bytes = curve25519::SharedKey::from_bytes([0xFF;32]);
-        let master_key : Vec<u8> = [ &disconuity_bytes, local_identity_remote_handshake_dh_secret,
-                            local_handshake_remote_identity_dh_secred,
-                            local_handshake_remote_handshake_dh_secret]
-                            .iter()
-                            .flat_map(|x| {x.to_bytes()})
-                            .map(|x|{*x})
-                            .collect();
-
+        let master_key = [&[0xFF;32][..], &initial_secret[..]].concat();
         let (rk, ck) = keys_from_kdf(&master_key[..], "WhisperText".as_bytes(),&SEED_NULL);
         (Rootkey(rk),ChainKey(ck))
     }
@@ -167,13 +160,11 @@ impl Axolotl for TextSecureV3{
         &self,
         message : &Self::Message, 
         message_key : &Self::MessageKey, 
-        sender_identity : &Self::PublicKey, 
-        receiver_identity : &Self::PublicKey
+        session_identity : &Self::SessionIdentity
     ) -> Self::Mac{
 
         let mut mac_state = hmac::HmacSha256::new(&message_key.mac_key);
-        mac_state.input(sender_identity.to_bytes());
-        mac_state.input(receiver_identity.to_bytes());
+        mac_state.input(&session_identity[..]);
         mac_state.input(&message.ciphertext.cipher_text[..]); //TODO: input the version
         hmac::truncate_mac_result(mac_state.result(), 8)
     }
