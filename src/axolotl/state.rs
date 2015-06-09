@@ -4,8 +4,7 @@ use super::axolotl::{Axolotl, Header, KeyPair, ReceiveError};
 
 pub struct AxolotlState<T> where T:Axolotl {
     root_key : T::RootKey,
-    identity_key_local  : T::PublicKey,
-    identity_key_remote : T::PublicKey,
+    session_identity : T::SessionIdentity,
     message_number_send : usize,
     message_number_prev : usize,
 
@@ -35,51 +34,41 @@ impl<T:Axolotl> Clone for ReceiveChain<T> {
 
 pub fn init_as_alice<T>(
     axolotl_impl : &T,
-    identity_key_local : &T::PrivateKey,
-    identity_key_remote : &T::PublicKey,
-    handshake_key_local : &T::PrivateKey,
-    handshake_key_remote : &T::PublicKey,
-    initial_ratchet_key : &T::PublicKey
+    session_identity : T::SessionIdentity,
+    initial_secret : T::InitialSharedSecret,
+    bob_ratchet_key_send : T::PublicKey
     ) -> AxolotlState<T> 
     where T:Axolotl {
         let ratchet_keypair = axolotl_impl.generate_ratchet_key_pair();
         init_as_alice_with_explicit_ratchet_keypair(
             axolotl_impl,
-            identity_key_local,
-            identity_key_remote,
-            handshake_key_local,
-            handshake_key_remote,
+            session_identity,
+            initial_secret,
             ratchet_keypair,
-            initial_ratchet_key
+            bob_ratchet_key_send
         ) 
 
 }
 pub fn init_as_alice_with_explicit_ratchet_keypair<T>(
     axolotl_impl : &T,
-    identity_key_local : &T::PrivateKey,
-    identity_key_remote : &T::PublicKey,
-    handshake_key_local : &T::PrivateKey,
-    handshake_key_remote : &T::PublicKey,
+    session_identity : T::SessionIdentity,
+    initial_secret : T::InitialSharedSecret,
     my_ratchet_keypair : KeyPair<T>,
-    initial_ratchet_key : &T::PublicKey) 
+    bob_ratchet_key_send : T::PublicKey) 
 -> AxolotlState<T> 
     where T:Axolotl {
-        let ab0 = axolotl_impl.derive_shared_secret(&identity_key_local, &handshake_key_remote);
-        let a0b = axolotl_impl.derive_shared_secret(&handshake_key_local, &identity_key_remote);
-        let a0b0 = axolotl_impl.derive_shared_secret(&handshake_key_local, &handshake_key_remote);
-        let (pre_root_key, chain_key_recv) = axolotl_impl.derive_initial_root_key_and_chain_key(&ab0, &a0b, &a0b0);
+        let (pre_root_key, chain_key_recv) = axolotl_impl.derive_initial_root_key_and_chain_key(initial_secret);
         let ratchet_key = my_ratchet_keypair;
-        let ratchet_key_derive_shared_secret = axolotl_impl.derive_shared_secret(&ratchet_key.key, initial_ratchet_key);
+        let ratchet_key_derive_shared_secret = axolotl_impl.derive_shared_secret(&ratchet_key.key, &bob_ratchet_key_send);
         let (root_key,chain_key_send) = axolotl_impl.derive_next_root_key_and_chain_key(pre_root_key, &ratchet_key_derive_shared_secret);
         let initial_receive_chain = ReceiveChain {
             chain_key_index : 0,
-            ratchet_key : initial_ratchet_key.clone(),
+            ratchet_key : bob_ratchet_key_send,
             message_keys : Vec::new(),
         };
         AxolotlState {
             root_key : root_key,
-            identity_key_local : axolotl_impl.derive_public_key(&identity_key_local),
-            identity_key_remote : identity_key_remote.clone(),
+            session_identity : session_identity,
             message_number_send : 0,
             message_number_prev : 0,
             chain_key_send : chain_key_send,
@@ -91,25 +80,19 @@ pub fn init_as_alice_with_explicit_ratchet_keypair<T>(
 
 pub fn init_as_bob<T>(
     axolotl_impl : &T,
-    identity_key_local : &T::PrivateKey,
-    identity_key_remote : &T::PublicKey,
-    handshake_key_local : &T::PrivateKey,
-    handshake_key_remote : &T::PublicKey,
-    initial_ratchet_key : KeyPair<T>) 
+    session_identity : T::SessionIdentity,
+    initial_secret : T::InitialSharedSecret,
+    bob_ratchet_key_send : KeyPair<T>) 
 -> AxolotlState<T> 
     where T:Axolotl {
-        let ab0 = axolotl_impl.derive_shared_secret(&handshake_key_local, &identity_key_remote);
-        let a0b = axolotl_impl.derive_shared_secret(&identity_key_local, &handshake_key_remote);
-        let a0b0 = axolotl_impl.derive_shared_secret(&handshake_key_local, &handshake_key_remote);
-        let (root_key, chain_key_send) = axolotl_impl.derive_initial_root_key_and_chain_key(&ab0, &a0b, &a0b0);
+        let (root_key, chain_key_send) = axolotl_impl.derive_initial_root_key_and_chain_key(initial_secret);
         AxolotlState {
             root_key : root_key,
-            identity_key_local : axolotl_impl.derive_public_key(&identity_key_local),
-            identity_key_remote : identity_key_remote.clone(),
+            session_identity : session_identity,
             message_number_send : 0,
             message_number_prev : 0,
             chain_key_send : chain_key_send,
-            ratchet_key_send : initial_ratchet_key,
+            ratchet_key_send : bob_ratchet_key_send,
             skipped_receive_chains : Vec::new(),
             current_receive_chain : None,
         }
@@ -157,12 +140,11 @@ impl <T:Axolotl> ReceiveChain<T> {
         axolotl_impl : &T,
         message : T::Message, 
         mac : &T::Mac,
-        sender_identity : &T::PublicKey, 
-        receiver_identity : &T::PublicKey,
+        session_identity : &T::SessionIdentity,
         message_key_index : usize,
     ) -> Result<T::PlainText,ReceiveError<T>> {
         let (_,ref message_key) = self.message_keys[message_key_index];
-        let expected_mac = axolotl_impl.authenticate_message(&message, message_key, sender_identity, receiver_identity);
+        let expected_mac = axolotl_impl.authenticate_message(&message, message_key, session_identity);
         if &expected_mac == mac {
             let ciphertext = try!(axolotl_impl.decode_ciphertext(message).map_err(|e|{ReceiveError::DecodeError(e)}));
             axolotl_impl.decrypt_message(&message_key, ciphertext).map_err(|e|{ReceiveError::DecryptError(e)})
@@ -178,8 +160,7 @@ impl <T:Axolotl> ReceiveChain<T> {
         message_number : usize,
         message : T::Message, 
         mac : &T::Mac,
-        sender_identity : &T::PublicKey, 
-        receiver_identity : &T::PublicKey,
+        session_identity : &T::SessionIdentity,
     ) -> Result<T::PlainText,ReceiveError<T>> {
         self.find_message_key(message_number)
             .and_then(|message_key_index| {
@@ -187,8 +168,7 @@ impl <T:Axolotl> ReceiveChain<T> {
                     axolotl_impl,
                     message, 
                     mac, 
-                    sender_identity, 
-                    receiver_identity, 
+                    session_identity, 
                     message_key_index
                 );
                 if plaintext.is_ok() {
@@ -219,7 +199,7 @@ impl <T:Axolotl> AxolotlState<T> {
             },
             ciphertext
         );
-        let mac = axolotl_impl.authenticate_message(&message, &message_key, &self.identity_key_remote, &self.identity_key_local);
+        let mac = axolotl_impl.authenticate_message(&message, &message_key, &self.session_identity);
 
         (new_chain_key,(message,mac))
     }
@@ -256,7 +236,7 @@ impl <T:Axolotl> AxolotlState<T> {
         match position {
             Some(pos) => {
                 let receive_chain = &mut self.skipped_receive_chains[pos];
-                Ok(receive_chain.try_decrypt(axolotl_impl, message_number, message, mac, &self.identity_key_local, &self.identity_key_remote))
+                Ok(receive_chain.try_decrypt(axolotl_impl, message_number, message, mac, &self.session_identity))
             },
             None => Err(message),
         }
@@ -275,10 +255,9 @@ impl <T:Axolotl> AxolotlState<T> {
                 if !axolotl_impl.ratchet_keys_are_equal(&current_chain.ratchet_key, message_ratchet_key) {
                     return Err(message);
                 }
-                let ref identity_key_local = self.identity_key_local;
-                let ref identity_key_remote = self.identity_key_remote;
+                let ref session_identity = self.session_identity;
                 Ok(current_chain.create_message_keys(axolotl_impl, chain_key, message_number).and_then(|_| {
-                    current_chain.try_decrypt(axolotl_impl, message_number, message, mac, identity_key_local, identity_key_remote)
+                    current_chain.try_decrypt(axolotl_impl, message_number, message, mac, session_identity)
                 }))
             },
             None => Err(message),
@@ -303,7 +282,7 @@ impl <T:Axolotl> AxolotlState<T> {
             message_keys : Vec::new(),
         };
         try!(new_receive_chain.create_message_keys(axolotl_impl, &mut receiver_chain_key, message_number));
-        let plaintext = new_receive_chain.try_decrypt(axolotl_impl, message_number, message, mac, &self.identity_key_local, &self.identity_key_remote);
+        let plaintext = new_receive_chain.try_decrypt(axolotl_impl, message_number, message, mac, &self.session_identity);
         if plaintext.is_ok() {
             let new_ratchet_key_send = axolotl_impl.generate_ratchet_key_pair();
             let new_ratchet_key_derive_shared_secret = axolotl_impl.derive_shared_secret(&new_ratchet_key_send.key, message_ratchet_key);
