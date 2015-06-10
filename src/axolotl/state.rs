@@ -1,5 +1,5 @@
 use std::result::Result;
-use super::axolotl::{Axolotl, Header, KeyPair, ReceiveError};
+use super::axolotl::{Axolotl, Header, KeyPair, SendError, ReceiveError};
 
 pub struct AxolotlState<T> where T:Axolotl {
     root_key : T::RootKey,
@@ -192,28 +192,29 @@ impl <T:Axolotl> ReceiveChain<T> {
 }
 impl <T:Axolotl> AxolotlState<T> {
 
-    pub fn encrypt(&mut self, axolotl_impl : &T, plaintext : T::PlainText) -> (T::Message, T::Mac) {
-        let (new_chain_key,result) = self.encrypt_and_get_next_chain_key(axolotl_impl, plaintext);
+    pub fn encrypt(&mut self, axolotl_impl : &T, plaintext : T::PlainText) -> Result<(T::Message, T::Mac), SendError<T>> {
+        let (new_chain_key,result) = try!(self.encrypt_and_get_next_chain_key(axolotl_impl, plaintext));
         self.chain_key_send = new_chain_key;
         self.message_number_send += 1;
-        result
+        Ok(result)
     }
 
-    fn encrypt_and_get_next_chain_key(&self, axolotl_impl : &T, plaintext : T::PlainText) -> (T::ChainKey, (T::Message, T::Mac)) {
+    fn encrypt_and_get_next_chain_key(&self, axolotl_impl : &T, plaintext : T::PlainText) -> Result<(T::ChainKey, (T::Message, T::Mac)), SendError<T>> {
         let (new_chain_key, message_key) = axolotl_impl.derive_next_chain_and_message_key(&self.chain_key_send);
-        let ciphertext = axolotl_impl.encrypt_message(&message_key, plaintext);
+        let ciphertext = try!(axolotl_impl.encrypt_message(&message_key, plaintext).map_err(|e|SendError::EncryptError(e)));
 
-        let message = axolotl_impl.encode_header_and_ciphertext(
+        let message = try!(axolotl_impl.encode_header_and_ciphertext(
             Header{
                 message_number : self.message_number_send,
                 message_number_prev : self.message_number_prev,
                 ratchet_key : self.ratchet_key_send.public.clone(),
             },
             ciphertext
-        );
+        ).map_err(|e|SendError::EncodeError(e)));
+
         let mac = axolotl_impl.authenticate_message(&message, &message_key, &self.session_identity);
 
-        (new_chain_key,(message,mac))
+        Ok((new_chain_key,(message,mac)))
     }
 
     pub fn decrypt(&mut self, axolotl_impl : &T, message : T::Message, ref mac : T::Mac

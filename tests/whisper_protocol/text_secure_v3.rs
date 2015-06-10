@@ -96,6 +96,8 @@ impl Axolotl for TextSecureV3{
 
     type Mac = hmac::MacResult;
 
+    type EncryptError = ();
+    type EncodeError = ();
     type DecryptError = ();
     type DecodeError = ();
 
@@ -132,15 +134,15 @@ impl Axolotl for TextSecureV3{
         &self,
         message_key : &Self::MessageKey, 
         plaintext : Self::PlainText
-    ) -> Self::CipherText{
+    ) -> Result<Self::CipherText, Self::EncryptError> {
 
         let PlainText(ref text) = plaintext;
         let ciphertext = aes_cbc::encrypt_aes256_cbc_mode(text,message_key.cipher_key, message_key.iv);
         
-        CipherTextAndVersion {
+        Ok(CipherTextAndVersion {
             version : 3,
             cipher_text : ciphertext,
-        }
+        })
     }
 
     fn decrypt_message(
@@ -173,13 +175,13 @@ impl Axolotl for TextSecureV3{
         &self,
         header : Header<Self>,
         ciphertext : Self::CipherText
-    ) -> Self::Message {
-        Message {
+    ) -> Result<Self::Message, Self::EncodeError> {
+        Ok(Message {
             message_number : header.message_number,
             message_number_prev : header.message_number_prev,
             ratchet_key : header.ratchet_key,
             ciphertext : ciphertext,
-        }
+        })
     }
 
     fn decode_header(&self, message : &Self::Message
