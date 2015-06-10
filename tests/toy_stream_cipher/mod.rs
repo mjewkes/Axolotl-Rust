@@ -138,12 +138,8 @@ impl Axolotl for Substitution {
 
     fn generate_ratchet_key_pair(&self) -> KeyPair<Self> {
         let key = next_rng().next_u64();
-        let public = self.derive_public_key(&key);
+        let public = key.wrapping_mul(31);
         KeyPair{ key : key, public : public }
-    }
-
-    fn derive_public_key(&self,key : &u64) -> u64 {
-        key.wrapping_mul(31)
     }
 
     fn derive_shared_secret(&self,a : &u64, b : &u64) -> u64 {

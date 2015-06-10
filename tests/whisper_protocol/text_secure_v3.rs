@@ -206,9 +206,6 @@ impl Axolotl for TextSecureV3{
         KeyPair{ key: priv_key, public : pub_key }
     }
 
-    fn derive_public_key(&self, key : &Self::PrivateKey) -> Self::PublicKey {
-        curve25519::derive_public_key(key)
-    }
     fn derive_shared_secret(&self, mine : &Self::PrivateKey, theirs : &Self::PublicKey) -> Self::SharedSecret {
         curve25519::derive_shared_key( mine,theirs)
     }

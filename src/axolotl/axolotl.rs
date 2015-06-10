@@ -79,8 +79,6 @@ pub trait Axolotl {
 
     fn derive_shared_secret(&self, key : &Self::PrivateKey, public : &Self::PublicKey) -> Self::SharedSecret;
 
-    fn derive_public_key(&self, key : &Self::PrivateKey) -> Self::PublicKey;
-
     fn future_message_limit(&self) -> usize;
 
     fn chain_message_limit(&self) -> usize;
