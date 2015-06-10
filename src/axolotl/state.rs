@@ -224,11 +224,25 @@ impl <T:Axolotl> AxolotlState<T> {
                 .map_err(|e|{ReceiveError::DecodeError(e)})
         );
 
-        macro_rules! try_return { ($e:expr) => { match $e { Ok(value) => { return value; }, Err(err) => err } } }
+        if let Some(skipped_chain_index) = self.find_skipped_chain_index(axolotl_impl, message_ratchet_key) {
+            return self.try_decrypt_with_skipped_chain(axolotl_impl, message, mac, message_number, skipped_chain_index);
+        }
 
-        let message = try_return!(self.try_decrypt_with_skipped_chain(axolotl_impl, message, mac, message_number, message_ratchet_key));
-        let message = try_return!(self.try_decrypt_with_current_chain(axolotl_impl, message, mac, message_number, message_ratchet_key));
+        if self.current_chain_matches_ratchet_key(axolotl_impl, message_ratchet_key) {
+            return self.try_decrypt_with_current_chain(axolotl_impl, message, mac, message_number, message_ratchet_key);
+        }
+
         self.try_decrypt_with_new_chain(axolotl_impl, message_number, message_number_prev, message_ratchet_key, message, mac)
+    }
+
+    fn find_skipped_chain_index(
+        &self, 
+        axolotl_impl : &T,
+        message_ratchet_key : &T::PublicKey
+    ) -> Option<usize> {
+        self.skipped_receive_chains.iter().position(
+            | &ReceiveChain{ref ratchet_key, ..} | axolotl_impl.ratchet_keys_are_equal(ratchet_key, message_ratchet_key)
+        )
     }
 
     fn try_decrypt_with_skipped_chain(
@@ -237,17 +251,20 @@ impl <T:Axolotl> AxolotlState<T> {
         message : T::Message, 
         mac : &T::Mac, 
         message_number : usize, 
+        skipped_chain_index : usize,
+    ) ->  Result<T::PlainText,ReceiveError<T>> {
+        let receive_chain = &mut self.skipped_receive_chains[skipped_chain_index];
+        receive_chain.try_decrypt(axolotl_impl, message_number, message, mac, &self.session_identity)
+    }
+
+    fn current_chain_matches_ratchet_key(
+        &self, 
+        axolotl_impl : &T,
         message_ratchet_key : &T::PublicKey
-    ) ->  Result<Result<T::PlainText,ReceiveError<T>>, T::Message> {
-        let position = self.skipped_receive_chains.iter().position(
-            | &ReceiveChain{ref ratchet_key, ..} | axolotl_impl.ratchet_keys_are_equal(ratchet_key, message_ratchet_key)
-        );
-        match position {
-            Some(pos) => {
-                let receive_chain = &mut self.skipped_receive_chains[pos];
-                Ok(receive_chain.try_decrypt(axolotl_impl, message_number, message, mac, &self.session_identity))
-            },
-            None => Err(message),
+    ) -> bool {
+        match self.current_receive_chain {
+            None => false,
+            Some((ref current_chain, _)) => axolotl_impl.ratchet_keys_are_equal(&current_chain.ratchet_key, message_ratchet_key),
         }
     }
 
@@ -258,12 +275,10 @@ impl <T:Axolotl> AxolotlState<T> {
         mac : &T::Mac, 
         message_number : usize, 
         message_ratchet_key : &T::PublicKey
-    ) ->  Result<Result<T::PlainText,ReceiveError<T>>, T::Message> {
-        macro_rules! check { ($e:expr) => { if !$e{return Err(message)} }}
-        check!(self.current_receive_chain.is_some());
+    ) ->  Result<T::PlainText,ReceiveError<T>> {
         let &mut (ref mut current_chain, ref mut chain_key) = self.current_receive_chain.as_mut().unwrap();
-        check!(axolotl_impl.ratchet_keys_are_equal(&current_chain.ratchet_key, message_ratchet_key));
-        Ok(current_chain.try_create_keys_and_decrypt(axolotl_impl, chain_key, message_number, message, mac, &self.session_identity))
+        assert!(axolotl_impl.ratchet_keys_are_equal(&current_chain.ratchet_key, message_ratchet_key));
+        current_chain.try_create_keys_and_decrypt(axolotl_impl, chain_key, message_number, message, mac, &self.session_identity)
     }
 
     fn try_decrypt_with_new_chain(
