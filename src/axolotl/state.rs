@@ -176,6 +176,19 @@ impl <T:Axolotl> ReceiveChain<T> {
                 plaintext
             })
     }
+
+    fn try_create_keys_and_decrypt(
+        &mut self,
+        axolotl_impl : &T,
+        chain_key : &mut T::ChainKey,
+        message_number : usize,
+        message : T::Message, 
+        mac : &T::Mac,
+        session_identity : &T::SessionIdentity
+    ) -> Result<T::PlainText,ReceiveError<T>> {
+        try!(self.create_message_keys(axolotl_impl, chain_key, message_number));
+        self.try_decrypt(axolotl_impl, message_number, message, mac, session_identity)
+    }
 }
 impl <T:Axolotl> AxolotlState<T> {
 
@@ -246,18 +259,11 @@ impl <T:Axolotl> AxolotlState<T> {
         message_number : usize, 
         message_ratchet_key : &T::PublicKey
     ) ->  Result<Result<T::PlainText,ReceiveError<T>>, T::Message> {
-        match self.current_receive_chain {
-            Some((ref mut current_chain, ref mut chain_key)) => {
-                if !axolotl_impl.ratchet_keys_are_equal(&current_chain.ratchet_key, message_ratchet_key) {
-                    return Err(message);
-                }
-                let ref session_identity = self.session_identity;
-                Ok(current_chain.create_message_keys(axolotl_impl, chain_key, message_number).and_then(|_| {
-                    current_chain.try_decrypt(axolotl_impl, message_number, message, mac, session_identity)
-                }))
-            },
-            None => Err(message),
-        }
+        macro_rules! check { ($e:expr) => { if !$e{return Err(message)} }}
+        check!(self.current_receive_chain.is_some());
+        let &mut (ref mut current_chain, ref mut chain_key) = self.current_receive_chain.as_mut().unwrap();
+        check!(axolotl_impl.ratchet_keys_are_equal(&current_chain.ratchet_key, message_ratchet_key));
+        Ok(current_chain.try_create_keys_and_decrypt(axolotl_impl, chain_key, message_number, message, mac, &self.session_identity))
     }
 
     fn try_decrypt_with_new_chain(
