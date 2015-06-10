@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::result::Result;
 use super::axolotl::{Axolotl, Header, KeyPair, ReceiveError};
 
@@ -206,20 +205,17 @@ impl <T:Axolotl> AxolotlState<T> {
 
     pub fn decrypt(&mut self, axolotl_impl : &T, message : T::Message, ref mac : T::Mac
     ) -> Result<T::PlainText,ReceiveError<T>> {
-        let Header{ message_number, message_number_prev, ratchet_key : message_ratchet_key_ref } = try!(
+        let Header{ message_number, message_number_prev, ratchet_key : ref message_ratchet_key } = try!(
             axolotl_impl
                 .decode_header(&message)
                 .map_err(|e|{ReceiveError::DecodeError(e)})
         );
-        let message_ratchet_key = message_ratchet_key_ref.borrow();
 
-        self.try_decrypt_with_skipped_chain(axolotl_impl, message, mac, message_number, message_ratchet_key)
-            .or_else(|message| {
-                self.try_decrypt_with_current_chain(axolotl_impl, message, mac, message_number, message_ratchet_key)
-            })
-            .unwrap_or_else(|message| {
-                self.try_decrypt_with_new_chain(axolotl_impl, message_number, message_number_prev, message_ratchet_key, message, mac)
-            })
+        macro_rules! try_return { ($e:expr) => { match $e { Ok(value) => { return value; }, Err(err) => err } } }
+
+        let message = try_return!(self.try_decrypt_with_skipped_chain(axolotl_impl, message, mac, message_number, message_ratchet_key));
+        let message = try_return!(self.try_decrypt_with_current_chain(axolotl_impl, message, mac, message_number, message_ratchet_key));
+        self.try_decrypt_with_new_chain(axolotl_impl, message_number, message_number_prev, message_ratchet_key, message, mac)
     }
 
     fn try_decrypt_with_skipped_chain(
