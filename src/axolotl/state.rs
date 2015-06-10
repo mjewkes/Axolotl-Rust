@@ -284,24 +284,37 @@ impl <T:Axolotl> AxolotlState<T> {
             message_keys : Vec::new(),
         };
         try!(new_receive_chain.create_message_keys(axolotl_impl, &mut receiver_chain_key, message_number));
-        let plaintext = new_receive_chain.try_decrypt(axolotl_impl, message_number, message, mac, &self.session_identity);
-        if plaintext.is_ok() {
-            let new_ratchet_key_send = axolotl_impl.generate_ratchet_key_pair();
-            let new_ratchet_key_derive_shared_secret = axolotl_impl.derive_shared_secret(&new_ratchet_key_send.key, message_ratchet_key);
-            let (root_key, chain_key_send) = axolotl_impl.derive_next_root_key_and_chain_key(receiver_root_key, &new_ratchet_key_derive_shared_secret);
-            let truncate_to = axolotl_impl.skipped_chain_limit();
-            if let Some((ref mut current_chain, ref mut current_chain_key)) = self.current_receive_chain {
-                try!(current_chain.create_message_keys(axolotl_impl, current_chain_key, message_number_prev));
-                self.skipped_receive_chains.insert(0, current_chain.clone());
-                self.skipped_receive_chains.truncate(truncate_to);
-            }
-            self.current_receive_chain = Some((new_receive_chain, receiver_chain_key));
-            self.message_number_prev = self.message_number_send;
-            self.message_number_send = 0;
-            self.root_key = root_key;
-            self.chain_key_send = chain_key_send;
-            self.ratchet_key_send = new_ratchet_key_send;
+        let plaintext = try!(new_receive_chain.try_decrypt(axolotl_impl, message_number, message, mac, &self.session_identity));
+
+        try!(self.advance_ratchet(axolotl_impl, message_ratchet_key, receiver_root_key, new_receive_chain, receiver_chain_key, message_number_prev));
+
+        Ok(plaintext)
+    }
+
+    fn advance_ratchet(
+        &mut self, 
+        axolotl_impl : &T, 
+        message_ratchet_key : &T::PublicKey, 
+        receiver_root_key : T::RootKey,
+        new_receive_chain : ReceiveChain<T>,
+        receiver_chain_key : T::ChainKey,
+        message_number_prev : usize
+    ) -> Result<(), ReceiveError<T>> {
+        let new_ratchet_key_send = axolotl_impl.generate_ratchet_key_pair();
+        let new_ratchet_key_derive_shared_secret = axolotl_impl.derive_shared_secret(&new_ratchet_key_send.key, message_ratchet_key);
+        let (root_key, chain_key_send) = axolotl_impl.derive_next_root_key_and_chain_key(receiver_root_key, &new_ratchet_key_derive_shared_secret);
+        let truncate_to = axolotl_impl.skipped_chain_limit();
+        if let Some((ref mut current_chain, ref mut current_chain_key)) = self.current_receive_chain {
+            try!(current_chain.create_message_keys(axolotl_impl, current_chain_key, message_number_prev));
+            self.skipped_receive_chains.insert(0, current_chain.clone());
+            self.skipped_receive_chains.truncate(truncate_to);
         }
-        plaintext
+        self.current_receive_chain = Some((new_receive_chain, receiver_chain_key));
+        self.message_number_prev = self.message_number_send;
+        self.message_number_send = 0;
+        self.root_key = root_key;
+        self.chain_key_send = chain_key_send;
+        self.ratchet_key_send = new_ratchet_key_send;
+        Ok(())
     }
 }
