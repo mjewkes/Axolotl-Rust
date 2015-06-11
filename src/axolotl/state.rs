@@ -166,13 +166,12 @@ impl <T:Axolotl> ReceiveChain<T> {
         let plaintext = {
             let ref message_key = try!(self.find_message_key(message_number));
             try!(ReceiveChain::try_authenticate(axolotl_impl, mac,&message,message_key,session_identity));
-            ReceiveChain::decode_and_decrypt_message(axolotl_impl,message,message_key)
+            try!(ReceiveChain::decode_and_decrypt_message(axolotl_impl,message,message_key))
         };
         
-        if plaintext.is_ok() {
-            self.message_keys.remove(&message_number);
-        }
-        plaintext
+        self.message_keys.remove(&message_number);
+
+        Ok(plaintext)
     }
 
     fn try_create_keys_and_decrypt(
