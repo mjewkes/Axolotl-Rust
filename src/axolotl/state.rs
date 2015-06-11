@@ -15,14 +15,14 @@ pub struct AxolotlState<T> where T:Axolotl {
 }
 
 struct ReceiveChain<T> where T:Axolotl {
-    chain_key_index : usize,
+    next_chain_key_index : usize,
     ratchet_key : T::PublicKey,
     message_keys : Vec<(usize,T::MessageKey)>,
 }
 impl<T:Axolotl> Clone for ReceiveChain<T> {
     fn clone(&self) -> Self {
         ReceiveChain{
-            chain_key_index : self.chain_key_index,
+            next_chain_key_index : self.next_chain_key_index,
             ratchet_key : self.ratchet_key.clone(),
             message_keys : self.message_keys.clone(),
         }
@@ -61,7 +61,7 @@ pub fn init_as_alice_with_explicit_ratchet_keypair<T>(
         let ratchet_key_derive_shared_secret = axolotl_impl.derive_shared_secret(&ratchet_key.key, &bob_ratchet_key_send);
         let (root_key,chain_key_send) = axolotl_impl.derive_next_root_key_and_chain_key(pre_root_key, &ratchet_key_derive_shared_secret);
         let initial_receive_chain = ReceiveChain {
-            chain_key_index : 0,
+            next_chain_key_index : 0,
             ratchet_key : bob_ratchet_key_send,
             message_keys : Vec::new(),
         };
@@ -101,7 +101,7 @@ pub fn init_as_bob<T>(
 
 impl <T:Axolotl> ReceiveChain<T> {
     fn find_message_key_index(&self, message_number : usize) -> Result<usize,ReceiveError<T>> {
-        if message_number >= self.chain_key_index {
+        if message_number >= self.next_chain_key_index {
             return Err(ReceiveError::MessageNumberAheadOfChainLength(message_number));
         }
 
@@ -116,16 +116,16 @@ impl <T:Axolotl> ReceiveChain<T> {
             return Err(ReceiveError::MessageNumberTooLarge(index));
         }
 
-        if index > self.chain_key_index + axolotl_impl.future_message_limit() {
+        if index > self.next_chain_key_index + axolotl_impl.future_message_limit() {
             return Err(ReceiveError::MessageNumberTooFarAhead(index));
         }
 
         
-        for i in self.chain_key_index..(index+1) {
+        for i in self.next_chain_key_index..(index+1) {
             let (next_chain_key, message_key) = axolotl_impl.derive_next_chain_and_message_key(chain_key);
             self.message_keys.push((i,message_key));
             *chain_key = next_chain_key;
-            self.chain_key_index += 1;
+            self.next_chain_key_index += 1;
         }
         Ok(())
     }
@@ -291,7 +291,7 @@ impl <T:Axolotl> AxolotlState<T> {
         let (receiver_root_key, mut receiver_chain_key) = axolotl_impl.derive_next_root_key_and_chain_key(self.root_key.clone(), &ratchet_key_derive_shared_secret);
 
         let mut new_receive_chain = ReceiveChain {
-            chain_key_index : 0,
+            next_chain_key_index : 0,
             ratchet_key : message_ratchet_key.clone(),
             message_keys : Vec::new(),
         };
