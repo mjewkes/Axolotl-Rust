@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::result::Result;
 use super::axolotl::{Axolotl, Header, KeyPair, SendError, ReceiveError};
 
@@ -17,7 +18,7 @@ pub struct AxolotlState<T> where T:Axolotl {
 struct ReceiveChain<T> where T:Axolotl {
     next_chain_key_index : usize,
     ratchet_key : T::PublicKey,
-    message_keys : Vec<(usize,T::MessageKey)>,
+    message_keys : HashMap<usize,T::MessageKey>,
 }
 impl<T:Axolotl> Clone for ReceiveChain<T> {
     fn clone(&self) -> Self {
@@ -63,7 +64,7 @@ pub fn init_as_alice_with_explicit_ratchet_keypair<T>(
         let initial_receive_chain = ReceiveChain {
             next_chain_key_index : 0,
             ratchet_key : bob_ratchet_key_send,
-            message_keys : Vec::new(),
+            message_keys : HashMap::new(),
         };
         AxolotlState {
             root_key : root_key,
@@ -105,8 +106,8 @@ impl <T:Axolotl> ReceiveChain<T> {
             return Err(ReceiveError::MessageNumberAheadOfChainLength(message_number));
         }
 
-        match self.message_keys.iter().position(|&(chain_index,_)| message_number == chain_index ) {
-            Some(i) => Ok(i),
+        match self.message_keys.get(&message_number) {
+            Some(key) => Ok(message_number),
             None => Err(ReceiveError::MessageNumberAlreadyUsed(message_number)),
         }
     }
@@ -123,7 +124,7 @@ impl <T:Axolotl> ReceiveChain<T> {
         
         for i in self.next_chain_key_index..(index+1) {
             let (next_chain_key, message_key) = axolotl_impl.derive_next_chain_and_message_key(chain_key);
-            self.message_keys.push((i,message_key));
+            self.message_keys.insert(i,message_key);
             *chain_key = next_chain_key;
             self.next_chain_key_index += 1;
         }
@@ -138,7 +139,7 @@ impl <T:Axolotl> ReceiveChain<T> {
         session_identity : &T::SessionIdentity,
         message_key_index : usize,
     ) -> Result<T::PlainText,ReceiveError<T>> {
-        let (_,ref message_key) = self.message_keys[message_key_index];
+        let ref message_key = self.message_keys[&message_key_index];
         let expected_mac = axolotl_impl.authenticate_message(&message, message_key, session_identity);
         if &expected_mac == mac {
             let ciphertext = try!(axolotl_impl.decode_ciphertext(message).map_err(|e|{ReceiveError::DecodeError(e)}));
@@ -167,7 +168,7 @@ impl <T:Axolotl> ReceiveChain<T> {
                     message_key_index
                 );
                 if plaintext.is_ok() {
-                    self.message_keys.remove(message_key_index);
+                    self.message_keys.remove(&message_key_index);
                 }
                 plaintext
             })
@@ -293,7 +294,7 @@ impl <T:Axolotl> AxolotlState<T> {
         let mut new_receive_chain = ReceiveChain {
             next_chain_key_index : 0,
             ratchet_key : message_ratchet_key.clone(),
-            message_keys : Vec::new(),
+            message_keys : HashMap::new(),
         };
         try!(new_receive_chain.create_message_keys(axolotl_impl, &mut receiver_chain_key, message_number));
         let plaintext = try!(new_receive_chain.try_decrypt(axolotl_impl, message_number, message, mac, &self.session_identity));
