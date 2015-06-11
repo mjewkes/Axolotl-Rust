@@ -21,21 +21,21 @@ fn next_rng() -> ChaChaRng {
 
 pub struct Substitution;
 
+#[derive(Clone)]
 pub struct Message {
     pub message_number : usize,
+    pub message_number_prev : usize,
     pub ratchet_key : u64,
     pub ciphertext : Vec<u8>,
-}
-
-impl<'a> AxolotlMessageRef<Substitution> for &'a Message {
-    type RatchetKey = &'a u64;
-    type CipherText = &'a Vec<u8>;
 }
 
 impl Axolotl for Substitution {
     type PrivateKey = u64;
     type PublicKey = u64;
     type SharedSecret = u64;
+
+    type InitialSharedSecret = u64;
+    type SessionIdentity = ();
 
     type RootKey = u64;
     type ChainKey = u64;
@@ -50,9 +50,8 @@ impl Axolotl for Substitution {
     type DecryptError = ();
     type DecodeError = ();
 
-    fn derive_initial_root_key_and_chain_key(&self, a : &u64, b : &u64, c : &u64) -> (u64,u64) {
-        let seed = *a ^ b.wrapping_mul(31) ^ c.wrapping_mul(31*31);
-        let mut rng = get_rng(seed);
+    fn derive_initial_root_key_and_chain_key(&self, secret : u64) -> (u64,u64) {
+        let mut rng = get_rng(secret);
         let root_key = rng.next_u64();
         let chain_key = rng.next_u64();
         (root_key,chain_key)
@@ -80,7 +79,7 @@ impl Axolotl for Substitution {
     fn encrypt_message(
         &self,
         key : &u64,
-        plaintext : &Vec<u8>) 
+        plaintext : Vec<u8>) 
     -> Vec<u8> {
         let mut rng = get_rng(*key);
         plaintext
@@ -93,7 +92,7 @@ impl Axolotl for Substitution {
     fn decrypt_message(
         &self,
         key : &u64,
-        ciphertext : &Vec<u8>) 
+        ciphertext : Vec<u8>) 
     -> Result<Vec<u8>,()> {
         let mut rng = get_rng(*key);
         let plaintext = ciphertext
@@ -104,29 +103,33 @@ impl Axolotl for Substitution {
     }
 
     fn encode_header_and_ciphertext(
-        &self, 
-        message_number : usize, 
-        ratchet_key : Self::PublicKey, 
+        &self,
+        header : Header<Self>,
         ciphertext : Self::CipherText
     ) -> Self::Message {
         Message {
-            message_number : message_number,
-            ratchet_key : ratchet_key,
+            message_number : header.message_number,
+            message_number_prev : header.message_number_prev,
+            ratchet_key : header.ratchet_key,
             ciphertext : ciphertext,
         }
     }
 
-    fn decode_header<'a>(&self, message : &'a Self::Message
-    ) -> Result<(usize, &'a Self::PublicKey),()> {
-        Ok((message.message_number, &message.ratchet_key))
+    fn decode_header(&self, message : &Self::Message
+    ) -> Result<Header<Self>,Self::DecodeError> {
+        Ok(Header{ 
+            message_number : message.message_number, 
+            message_number_prev : message.message_number_prev, 
+            ratchet_key : message.ratchet_key,
+        })
     }
 
-    fn decode_ciphertext<'a>(&self, message : &'a Self::Message
-    ) -> Result<&'a Self::CipherText,()> {
-        Ok(&message.ciphertext)
+    fn decode_ciphertext(&self, message : Self::Message
+    ) -> Result<Self::CipherText,()> {
+        Ok(message.ciphertext)
     }
 
-    fn authenticate_message(&self, _ : &Self::Message, _ : &u64, _ : &u64, _ : &u64) {
+    fn authenticate_message(&self, _ : &Self::Message, _ : &u64, _ : &()) {
     }
 
     fn ratchet_keys_are_equal(&self, a : &u64, b : &u64) -> bool {
@@ -135,12 +138,8 @@ impl Axolotl for Substitution {
 
     fn generate_ratchet_key_pair(&self) -> KeyPair<Self> {
         let key = next_rng().next_u64();
-        let public = self.derive_public_key(&key);
+        let public = key.wrapping_mul(31);
         KeyPair{ key : key, public : public }
-    }
-
-    fn derive_public_key(&self,key : &u64) -> u64 {
-        key.wrapping_mul(31)
     }
 
     fn derive_shared_secret(&self,a : &u64, b : &u64) -> u64 {
@@ -163,26 +162,20 @@ impl Axolotl for Substitution {
 }
 
 pub fn init_alice_and_bob(axolotl_impl : &Substitution) -> (AxolotlState<Substitution>, AxolotlState<Substitution>) {
-    let alice_identity = axolotl_impl.generate_ratchet_key_pair();
-    let alice_handshake = axolotl_impl.generate_ratchet_key_pair();
-    let bob_identity = axolotl_impl.generate_ratchet_key_pair();
-    let bob_handshake = axolotl_impl.generate_ratchet_key_pair();
     let initial_ratchet = axolotl_impl.generate_ratchet_key_pair();
 
+    let initial_shared_secret = next_rng().next_u64();
+
     let alice = init_as_alice::<Substitution>(
-        axolotl_impl, 
-        &alice_identity.key, 
-        &bob_identity.public,
-        &alice_handshake.key,
-        &bob_handshake.public, 
-        &initial_ratchet.public
+        axolotl_impl,
+        (),
+        initial_shared_secret,
+        initial_ratchet.public
     );
     let bob = init_as_bob::<Substitution>(
         axolotl_impl,
-        &bob_identity.key,
-        &alice_identity.public,
-        &bob_handshake.key,
-        &alice_handshake.public,
+        (),
+        initial_shared_secret,
         initial_ratchet
     );
 
@@ -191,8 +184,8 @@ pub fn init_alice_and_bob(axolotl_impl : &Substitution) -> (AxolotlState<Substit
 
 pub fn check_send(axolotl_impl : &Substitution, sender : &mut AxolotlState<Substitution>, receiver : &mut AxolotlState<Substitution>, message : String) -> Message {
     let m = message.into_bytes();
-    let encrypted = sender.encrypt(axolotl_impl, &m);
-    let decrypted = receiver.decrypt(axolotl_impl, &encrypted.0, encrypted.1).unwrap();
+    let encrypted = sender.encrypt(axolotl_impl, m.clone());
+    let decrypted = receiver.decrypt(axolotl_impl, encrypted.0.clone(), encrypted.1).unwrap();
     assert!(m[..] == decrypted[..]);
     assert!(m[..] != encrypted.0.ciphertext[..]);
     encrypted.0

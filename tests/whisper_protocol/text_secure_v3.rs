@@ -1,5 +1,5 @@
 extern crate raxolotl;
-pub use self::raxolotl::axolotl::{Axolotl,AxolotlMessageRef,KeyPair};
+pub use self::raxolotl::axolotl::{Axolotl,Header,KeyPair};
 
 use whisper_protocol::crypto_wrappers::{aes_cbc,curve25519,hkdf,hmac};
 
@@ -55,34 +55,36 @@ pub struct MessageKey{
     iv : [u8;16],
 }
 
-pub struct PlainText(pub Box<[u8]>);
+#[derive(Clone)]
+pub struct PlainText(pub Vec<u8>);
 
 impl PlainText {
     pub fn from_vec(data : Vec<u8>) -> PlainText {
-        PlainText(data.into_boxed_slice())
+        PlainText(data)
     }
 }
 
+#[derive(Clone)]
 pub struct CipherTextAndVersion{
-    pub cipher_text : Box<[u8]>,
+    pub cipher_text : Vec<u8>,
     version : u8,
 }
 
+#[derive(Clone)]
 pub struct Message {
     pub message_number : usize,
+    pub message_number_prev : usize,
     pub ratchet_key : curve25519::PublicKey,
     pub ciphertext : CipherTextAndVersion,
-}
-
-impl<'a> AxolotlMessageRef<TextSecureV3> for &'a Message {
-    type RatchetKey = &'a curve25519::PublicKey;
-    type CipherText = &'a CipherTextAndVersion;
 }
 
 impl Axolotl for TextSecureV3{
     type PrivateKey = curve25519::PrivateKey;
     type PublicKey  = curve25519::PublicKey;
     type SharedSecret  = curve25519::SharedKey;
+
+    type InitialSharedSecret = Vec<u8>;
+    type SessionIdentity = Vec<u8>;
 
     type RootKey = Rootkey;
     type ChainKey = ChainKey;
@@ -100,20 +102,10 @@ impl Axolotl for TextSecureV3{
     /// Returns initial Root and Chain keys derived from initial the TripleDH handshake. 
     fn derive_initial_root_key_and_chain_key(
         &self,
-        local_identity_remote_handshake_dh_secret : &Self::SharedSecret, 
-        local_handshake_remote_identity_dh_secred : &Self::SharedSecret, 
-        local_handshake_remote_handshake_dh_secret : &Self::SharedSecret
+        initial_secret : Self::InitialSharedSecret
     ) -> (Self::RootKey, Self::ChainKey){
 
-        let disconuity_bytes = curve25519::SharedKey::from_bytes([0xFF;32]);
-        let mut master_key : Vec<u8> = [ &disconuity_bytes, local_identity_remote_handshake_dh_secret,
-                            local_handshake_remote_identity_dh_secred,
-                            local_handshake_remote_handshake_dh_secret]
-                            .iter()
-                            .flat_map(|x| {x.to_bytes()})
-                            .map(|x|{*x})
-                            .collect();
-
+        let master_key = [&[0xFF;32][..], &initial_secret[..]].concat();
         let (rk, ck) = keys_from_kdf(&master_key[..], "WhisperText".as_bytes(),&SEED_NULL);
         (Rootkey(rk),ChainKey(ck))
     }
@@ -139,67 +131,69 @@ impl Axolotl for TextSecureV3{
     fn encrypt_message(
         &self,
         message_key : &Self::MessageKey, 
-        plaintext : &Self::PlainText
+        plaintext : Self::PlainText
     ) -> Self::CipherText{
 
-        let PlainText(ref text) = *plaintext;
+        let PlainText(ref text) = plaintext;
         let ciphertext = aes_cbc::encrypt_aes256_cbc_mode(text,message_key.cipher_key, message_key.iv);
         
         CipherTextAndVersion {
             version : 3,
-            cipher_text : ciphertext.into_boxed_slice(),
+            cipher_text : ciphertext,
         }
     }
 
     fn decrypt_message(
         &self,
         message_key : &Self::MessageKey, 
-        ciphertext : &Self::CipherText
+        ciphertext : Self::CipherText
     ) -> Result<Self::PlainText,()>{
         if ciphertext.version != 3 {
             return Err(());
         }
 
         let result = aes_cbc::decrypt_aes256_cbc_mode(&ciphertext.cipher_text, message_key.cipher_key, message_key.iv);
-        Ok(PlainText(result.into_boxed_slice()))
+        Ok(PlainText(result))
     }
 
     fn authenticate_message(
         &self,
         message : &Self::Message, 
         message_key : &Self::MessageKey, 
-        sender_identity : &Self::PublicKey, 
-        receiver_identity : &Self::PublicKey
+        session_identity : &Self::SessionIdentity
     ) -> Self::Mac{
 
         let mut mac_state = hmac::HmacSha256::new(&message_key.mac_key);
-        mac_state.input(sender_identity.to_bytes());
-        mac_state.input(receiver_identity.to_bytes());
+        mac_state.input(&session_identity[..]);
         mac_state.input(&message.ciphertext.cipher_text[..]); //TODO: input the version
         hmac::truncate_mac_result(mac_state.result(), 8)
     }
 
     fn encode_header_and_ciphertext(
-        &self, 
-        message_number : usize, 
-        ratchet_key : Self::PublicKey, 
+        &self,
+        header : Header<Self>,
         ciphertext : Self::CipherText
     ) -> Self::Message {
         Message {
-            message_number : message_number,
-            ratchet_key : ratchet_key,
+            message_number : header.message_number,
+            message_number_prev : header.message_number_prev,
+            ratchet_key : header.ratchet_key,
             ciphertext : ciphertext,
         }
     }
 
-    fn decode_header<'a>(&self, message : &'a Self::Message
-    ) -> Result<(usize, &'a Self::PublicKey),()> {
-        Ok((message.message_number, &message.ratchet_key))
+    fn decode_header(&self, message : &Self::Message
+    ) -> Result<Header<Self>,Self::DecodeError> {
+        Ok(Header{ 
+            message_number : message.message_number, 
+            message_number_prev : message.message_number_prev, 
+            ratchet_key : message.ratchet_key.clone(),
+        })
     }
 
-    fn decode_ciphertext<'a>(&self, message : &'a Self::Message
-    ) -> Result<&'a Self::CipherText,()> {
-        Ok(&message.ciphertext)
+    fn decode_ciphertext(&self, message : Self::Message
+    ) -> Result<Self::CipherText,()> {
+        Ok(message.ciphertext)
     }
 
     fn ratchet_keys_are_equal(&self, key0 : &Self::PublicKey, key1 : &Self::PublicKey) -> bool{
@@ -212,9 +206,6 @@ impl Axolotl for TextSecureV3{
         KeyPair{ key: priv_key, public : pub_key }
     }
 
-    fn derive_public_key(&self, key : &Self::PrivateKey) -> Self::PublicKey {
-        curve25519::derive_public_key(key)
-    }
     fn derive_shared_secret(&self, mine : &Self::PrivateKey, theirs : &Self::PublicKey) -> Self::SharedSecret {
         curve25519::derive_shared_key( mine,theirs)
     }

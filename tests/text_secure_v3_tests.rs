@@ -2,6 +2,7 @@ mod whisper_protocol;
 
 use whisper_protocol::{axolotl};
 use whisper_protocol::crypto_wrappers::curve25519;
+use whisper_protocol::crypto_wrappers::curve25519::{PublicKey,PrivateKey};
 use whisper_protocol::text_secure_v3::{KeyPair,PlainText,TextSecureV3};
 
 #[test]
@@ -12,13 +13,13 @@ fn dynamic_roundtrip_echo(){
     let msg = PlainText::from_vec("hello goat!".to_string().into_bytes());
 
     for __ in 0..10 {
-        let (wm, mac) = alice.encrypt(axolotl_impl, &msg);
-        let plaintext = bob.decrypt(axolotl_impl, &wm,mac).ok().unwrap();
+        let (wm, mac) = alice.encrypt(axolotl_impl, msg.clone());
+        let plaintext = bob.decrypt(axolotl_impl, wm,mac).ok().unwrap();
 
         assert_eq!(msg.0 , plaintext.0);
 
-        let (wmb, macb) = bob.encrypt(axolotl_impl, &plaintext);
-        let reply = alice.decrypt(axolotl_impl, &wmb,macb).ok().unwrap();
+        let (wmb, macb) = bob.encrypt(axolotl_impl, plaintext);
+        let reply = alice.decrypt(axolotl_impl, wmb,macb).ok().unwrap();
 
         assert_eq!(msg.0,reply.0);
     }
@@ -102,22 +103,25 @@ fn android_session_kat () {
                                         }; 
     let bob_ratchet_keypair = bob_base_keypair.clone();
 
+    let (shared_secret, session_identity) = triple_dh_shared_secret_and_identity(
+      alice_identity_keypair, 
+      alice_base_keypair,
+      bob_identity_keypair,
+      bob_base_keypair
+    );
+
     let mut alice = axolotl::init_as_alice_with_explicit_ratchet_keypair::<TextSecureV3>(
         axolotl_impl,
-        &alice_identity_keypair.key,
-        &bob_identity_keypair.public,
-        &alice_base_keypair.key,
-        &bob_base_keypair.public,
+        session_identity.clone(),
+        shared_secret.clone(),
         alice_sending_ratchet_keypair,
-        &bob_ratchet_keypair.public
+        bob_ratchet_keypair.public.clone()
     );
 
     let mut bob = axolotl::init_as_bob::<TextSecureV3>(
         axolotl_impl,
-        &bob_identity_keypair.key,
-        &alice_identity_keypair.public,
-        &bob_base_keypair.key,
-        &alice_base_keypair.public,
+        session_identity.clone(),
+        shared_secret.clone(),
         bob_ratchet_keypair
     );
     
@@ -126,25 +130,25 @@ fn android_session_kat () {
     let a_plain = PlainText::from_vec(alice_plaintext.to_vec());
 
 
-    let (alice_cipher_msg,ab_mac) = alice.encrypt(axolotl_impl, &a_plain);
+    let (alice_cipher_msg,ab_mac) = alice.encrypt(axolotl_impl, a_plain);
     assert_eq!(&alice_cipher_msg.ciphertext.cipher_text[..], &alice_cipher_text[..]);
 
    
-    let bob_plain = bob.decrypt(axolotl_impl, &alice_cipher_msg,ab_mac).ok().unwrap();
+    let bob_plain = bob.decrypt(axolotl_impl, alice_cipher_msg,ab_mac).ok().unwrap();
     assert_eq!(bob_plain.0.to_vec(),&alice_plaintext[..]);
    
     for i in 0 .. 100{
         let message = [i;78];
 
-        let (c,m) = alice.encrypt(axolotl_impl, &PlainText::from_vec(message.to_vec()));      
-        assert_eq!(&message[..], &bob.decrypt(axolotl_impl, &c,m).ok().unwrap().0.to_vec()[..] );
+        let (c,m) = alice.encrypt(axolotl_impl, PlainText::from_vec(message.to_vec()));      
+        assert_eq!(&message[..], &bob.decrypt(axolotl_impl, c,m).ok().unwrap().0.to_vec()[..] );
     }
 
     for i in 0 .. 100{
         let message = [i;1802];
 
-        let (c,m) = bob.encrypt(axolotl_impl, &PlainText::from_vec(message.to_vec()));
-        assert_eq!(&message[..], &alice.decrypt(axolotl_impl, &c,m).ok().unwrap().0.to_vec()[..] );
+        let (c,m) = bob.encrypt(axolotl_impl, PlainText::from_vec(message.to_vec()));
+        assert_eq!(&message[..], &alice.decrypt(axolotl_impl, c,m).ok().unwrap().0.to_vec()[..] );
     }
 }
 
@@ -159,7 +163,33 @@ fn dhkey_pair() -> KeyPair<TextSecureV3> {
 fn dhkey_pair_from_bytes(private : [u8;32], public: [u8;32]) -> KeyPair<TextSecureV3> {
 
     KeyPair{ key :curve25519::PrivateKey::from_bytes(private), public : curve25519::PublicKey::from_bytes(public)}
-} 
+}
+
+fn triple_dh_shared_secret_and_identity(
+  alice_identity : KeyPair<TextSecureV3>,
+  alice_handshake : KeyPair<TextSecureV3>,
+  bob_identity : KeyPair<TextSecureV3>,
+  bob_handshake : KeyPair<TextSecureV3>,
+) -> (Vec<u8>, Vec<u8>) {
+
+  let session_identity = [&alice_identity.public.to_bytes()[..], &bob_identity.public.to_bytes()[..]].concat();
+
+  let alice_shared_secret = [
+      &curve25519::derive_shared_key(&alice_identity.key, &bob_handshake.public).to_bytes()[..],
+      &curve25519::derive_shared_key(&alice_handshake.key, &bob_identity.public).to_bytes()[..],
+      &curve25519::derive_shared_key(&alice_handshake.key, &bob_handshake.public).to_bytes()[..],
+    ].concat();
+
+    let bob_shared_secret = [
+      &curve25519::derive_shared_key(&bob_handshake.key, &alice_identity.public).to_bytes()[..],
+      &curve25519::derive_shared_key(&bob_identity.key, &alice_handshake.public).to_bytes()[..],
+      &curve25519::derive_shared_key(&bob_handshake.key, &alice_handshake.public).to_bytes()[..],
+    ].concat();
+
+    assert!(alice_shared_secret == bob_shared_secret);
+
+    (alice_shared_secret, session_identity)
+}
 
 fn init_dynamic_axolotl_states(axolotl_impl : &TextSecureV3) -> (axolotl::AxolotlState<TextSecureV3>, axolotl::AxolotlState<TextSecureV3>) {
 
@@ -169,20 +199,23 @@ fn init_dynamic_axolotl_states(axolotl_impl : &TextSecureV3) -> (axolotl::Axolot
     let bob_handshake = dhkey_pair();
     let initial_ratchet = dhkey_pair();
 
+    let (shared_secret, session_identity) = triple_dh_shared_secret_and_identity(
+      alice_identity, 
+      alice_handshake,
+      bob_identity,
+      bob_handshake,
+    );
+
     let alice = axolotl::init_as_alice::<TextSecureV3>(
-      axolotl_impl, 
-      &alice_identity.key,
-      &bob_identity.public,
-      &alice_handshake.key,
-      &bob_handshake.public, 
-      &initial_ratchet.public
+      axolotl_impl,
+      session_identity.clone(),
+      shared_secret.clone(),
+      initial_ratchet.public.clone(),
     );
     let bob = axolotl::init_as_bob::<TextSecureV3>(
       axolotl_impl, 
-      &bob_identity.key,
-      &alice_identity.public,
-      &bob_handshake.key,
-      &alice_handshake.public, 
+      session_identity.clone(),
+      shared_secret.clone(),
       initial_ratchet
     );
     (alice,bob)
