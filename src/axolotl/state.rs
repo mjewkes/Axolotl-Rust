@@ -101,13 +101,13 @@ pub fn init_as_bob<T>(
 
 
 impl <T:Axolotl> ReceiveChain<T> {
-    fn find_message_key_index(&self, message_number : usize) -> Result<usize,ReceiveError<T>> {
+    fn find_message_key(&self, message_number : usize) -> Result<&T::MessageKey,ReceiveError<T>> {
         if message_number >= self.next_chain_key_index {
             return Err(ReceiveError::MessageNumberAheadOfChainLength(message_number));
         }
 
         match self.message_keys.get(&message_number) {
-            Some(key) => Ok(message_number),
+            Some(key) => Ok(key),
             None => Err(ReceiveError::MessageNumberAlreadyUsed(message_number)),
         }
     }
@@ -131,23 +131,28 @@ impl <T:Axolotl> ReceiveChain<T> {
         Ok(())
     }
 
-    fn try_decrypt_with_message_key_index(
-        &self,
+    fn try_authenticate(
         axolotl_impl : &T,
-        message : T::Message, 
-        mac : &T::Mac,
-        session_identity : &T::SessionIdentity,
-        message_key_index : usize,
-    ) -> Result<T::PlainText,ReceiveError<T>> {
-        let ref message_key = self.message_keys[&message_key_index];
-        let expected_mac = axolotl_impl.authenticate_message(&message, message_key, session_identity);
-        if &expected_mac == mac {
-            let ciphertext = try!(axolotl_impl.decode_ciphertext(message).map_err(|e|{ReceiveError::DecodeError(e)}));
-            axolotl_impl.decrypt_message(&message_key, ciphertext).map_err(|e|{ReceiveError::DecryptError(e)})
-        }
-        else {
+        expected_mac : &T::Mac,
+        message : &T::Message,
+        message_key : &T::MessageKey,
+        session_identity : &T::SessionIdentity
+    ) -> Result<(),ReceiveError<T>> {
+        let received_mac = axolotl_impl.authenticate_message(message, message_key, session_identity);
+        if expected_mac != &received_mac {
             Err(ReceiveError::InvalidMac)
+        }else {
+            Ok(())
         }
+    }
+
+    fn decode_and_decrypt_message(
+        axolotl_impl : &T,
+        message : T::Message,
+        message_key : &T::MessageKey
+    ) -> Result<T::PlainText,ReceiveError<T>>{
+        let ciphertext = try!(axolotl_impl.decode_ciphertext(message).map_err(|e|{ReceiveError::DecodeError(e)}));
+        axolotl_impl.decrypt_message(&message_key, ciphertext).map_err(|e|{ReceiveError::DecryptError(e)})
     }
 
     fn try_decrypt(
@@ -158,20 +163,16 @@ impl <T:Axolotl> ReceiveChain<T> {
         mac : &T::Mac,
         session_identity : &T::SessionIdentity,
     ) -> Result<T::PlainText,ReceiveError<T>> {
-        self.find_message_key_index(message_number)
-            .and_then(|message_key_index| {
-                let plaintext = self.try_decrypt_with_message_key_index(
-                    axolotl_impl,
-                    message, 
-                    mac, 
-                    session_identity, 
-                    message_key_index
-                );
-                if plaintext.is_ok() {
-                    self.message_keys.remove(&message_key_index);
-                }
-                plaintext
-            })
+        let plaintext = {
+            let ref message_key = try!(self.find_message_key(message_number));
+            try!(ReceiveChain::try_authenticate(axolotl_impl, mac,&message,message_key,session_identity));
+            ReceiveChain::decode_and_decrypt_message(axolotl_impl,message,message_key)
+        };
+        
+        if plaintext.is_ok() {
+            self.message_keys.remove(&message_number);
+        }
+        plaintext
     }
 
     fn try_create_keys_and_decrypt(
