@@ -100,19 +100,15 @@ pub fn init_as_bob<T>(
 
 
 impl <T:Axolotl> ReceiveChain<T> {
-    fn find_message_key(&self, index : usize) -> Result<usize,ReceiveError<T>> {
-        
-        if index >= self.chain_key_index {
-            return Err(ReceiveError::MessageNumberAheadOfChainLength(index));
+    fn find_message_key_index(&self, message_number : usize) -> Result<usize,ReceiveError<T>> {
+        if message_number >= self.chain_key_index {
+            return Err(ReceiveError::MessageNumberAheadOfChainLength(message_number));
         }
-        
-        for i in 0..self.message_keys.len() {
-            let (chain_index, _) = self.message_keys[i];
-            if chain_index == index {
-                return Ok(i);
-            }
+
+        match self.message_keys.iter().position(|&(chain_index,_)| message_number == chain_index ) {
+            Some(i) => Ok(i),
+            None => Err(ReceiveError::MessageNumberAlreadyUsed(message_number)),
         }
-        return Err(ReceiveError::MessageNumberAlreadyUsed(index));
     }
 
     fn create_message_keys(&mut self, axolotl_impl : &T, chain_key : &mut T::ChainKey, index : usize) -> Result<(), ReceiveError<T>> {
@@ -161,7 +157,7 @@ impl <T:Axolotl> ReceiveChain<T> {
         mac : &T::Mac,
         session_identity : &T::SessionIdentity,
     ) -> Result<T::PlainText,ReceiveError<T>> {
-        self.find_message_key(message_number)
+        self.find_message_key_index(message_number)
             .and_then(|message_key_index| {
                 let plaintext = self.try_decrypt_with_message_key_index(
                     axolotl_impl,
