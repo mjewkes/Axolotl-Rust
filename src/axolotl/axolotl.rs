@@ -18,6 +18,8 @@ pub trait Axolotl {
 
     type Mac : PartialEq;
 
+    type EncryptError : fmt::Debug;
+    type EncodeError : fmt::Debug;
     type DecryptError : fmt::Debug;
     type DecodeError : fmt::Debug;
 
@@ -42,7 +44,7 @@ pub trait Axolotl {
         &self,
         message_key : &Self::MessageKey,
         plaintext : Self::PlainText) 
-    -> Self::CipherText;
+    -> Result<Self::CipherText, Self::EncryptError>;
 
     fn decrypt_message(
         &self,
@@ -61,7 +63,7 @@ pub trait Axolotl {
         &self,
         header : Header<Self>,
         ciphertext : Self::CipherText
-    ) -> Self::Message;
+    ) -> Result<Self::Message, Self::EncodeError>;
 
     fn decode_header(&self, message : &Self::Message
     ) -> Result<Header<Self>,Self::DecodeError>;
@@ -106,6 +108,20 @@ impl<T> fmt::Debug for ReceiveError<T> where T:Axolotl {
             &ReceiveError::MessageNumberTooLarge(message_number) => write!(f, "MessageNumberTooLarge({:?})", message_number),
             &ReceiveError::MessageNumberAheadOfChainLength(message_number) => write!(f, "MessageNumberAheadOfChainLength({:?})", message_number),
             &ReceiveError::MessageNumberAlreadyUsed(message_number) => write!(f, "MessageNumberAlreadyUsed({:?})", message_number),
+        }
+    }
+}
+
+pub enum SendError<T> where T:Axolotl {
+    EncryptError(T::EncryptError),
+    EncodeError(T::EncodeError),
+}
+
+impl<T> fmt::Debug for SendError<T> where T:Axolotl {
+    fn fmt(&self, f : &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &SendError::EncryptError(ref err) => write!(f, "EncryptError({:?})", err),
+            &SendError::EncodeError(ref err) => write!(f, "EncodeError({:?})", err),
         }
     }
 }

@@ -47,6 +47,8 @@ impl Axolotl for Substitution {
 
     type Mac = ();
 
+    type EncryptError = ();
+    type EncodeError = ();
     type DecryptError = ();
     type DecodeError = ();
 
@@ -80,12 +82,13 @@ impl Axolotl for Substitution {
         &self,
         key : &u64,
         plaintext : Vec<u8>) 
-    -> Vec<u8> {
+    -> Result<Vec<u8>, Self::EncryptError> {
         let mut rng = get_rng(*key);
-        plaintext
+        let ciphertext = plaintext
             .iter()
             .map(|b|{rng.gen::<u8>() ^ b})
-            .collect()
+            .collect();
+        Ok(ciphertext)
     }
 
 
@@ -106,13 +109,13 @@ impl Axolotl for Substitution {
         &self,
         header : Header<Self>,
         ciphertext : Self::CipherText
-    ) -> Self::Message {
-        Message {
+    ) -> Result<Self::Message, Self::EncodeError> {
+        Ok(Message {
             message_number : header.message_number,
             message_number_prev : header.message_number_prev,
             ratchet_key : header.ratchet_key,
             ciphertext : ciphertext,
-        }
+        })
     }
 
     fn decode_header(&self, message : &Self::Message
@@ -184,7 +187,7 @@ pub fn init_alice_and_bob(axolotl_impl : &Substitution) -> (AxolotlState<Substit
 
 pub fn check_send(axolotl_impl : &Substitution, sender : &mut AxolotlState<Substitution>, receiver : &mut AxolotlState<Substitution>, message : String) -> Message {
     let m = message.into_bytes();
-    let encrypted = sender.encrypt(axolotl_impl, m.clone());
+    let encrypted = sender.encrypt(axolotl_impl, m.clone()).unwrap();
     let decrypted = receiver.decrypt(axolotl_impl, encrypted.0.clone(), encrypted.1).unwrap();
     assert!(m[..] == decrypted[..]);
     assert!(m[..] != encrypted.0.ciphertext[..]);
