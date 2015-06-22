@@ -1,5 +1,6 @@
 extern crate rand;
 extern crate raxolotl;
+extern crate serde;
 
 use self::rand::*;
 use self::raxolotl::axolotl::*;

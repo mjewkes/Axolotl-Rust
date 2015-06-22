@@ -1,3 +1,7 @@
+#![feature(custom_derive, plugin)]
+#![plugin(serde_macros)]
+extern crate serde;
+
 mod whisper_protocol;
 
 use whisper_protocol::{axolotl};
