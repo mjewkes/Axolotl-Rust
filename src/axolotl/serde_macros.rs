@@ -117,7 +117,9 @@ macro_rules! impl_axolotl_serde {
 							Some($field) => $field,
 							None => try!(visitor.missing_field(stringify!($field))),
 						};)+
-			
+						
+						try!(visitor.end());
+
 						Ok($Type { $($field:$field),+ })
 					}
 				}
