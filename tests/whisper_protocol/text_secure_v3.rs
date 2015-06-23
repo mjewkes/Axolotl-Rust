@@ -30,10 +30,10 @@ pub struct TextSecureV3;
 
 
 
-#[derive(Clone)]
+#[derive(Clone,Serialize,Deserialize)]
 pub struct Rootkey ([u8;32]);
 
-#[derive(Clone)]
+#[derive(Clone,Serialize,Deserialize)]
 pub struct ChainKey ([u8;KEY_LEN_CHAIN]);          // Should this have an indexVariable?
 
 impl ChainKey {
@@ -48,7 +48,7 @@ impl ChainKey {
         to_array!(hmac_context.result().code()[..],KEY_LEN_CHAIN)
     }
 }
-#[derive(Clone)]
+#[derive(Clone,Serialize,Deserialize)]
 pub struct MessageKey{
     cipher_key : [u8;32],
     mac_key : [u8;32],
