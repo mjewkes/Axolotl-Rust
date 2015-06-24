@@ -238,8 +238,13 @@ impl <T:Axolotl> AxolotlState<T> {
         Ok((new_chain_key,(message,mac)))
     }
 
-    pub fn decrypt(&mut self, axolotl_impl : &T, message : T::Message, ref mac : T::Mac
-    ) -> Result<T::PlainText,ReceiveError<T>> {
+    pub fn decrypt_with_keygen<Keygen>(
+        &mut self, 
+        axolotl_impl : &T, 
+        keygen : Keygen,
+        message : T::Message, 
+        ref mac : T::Mac,
+    ) -> Result<T::PlainText,ReceiveError<T>> where Keygen:FnOnce(&T) -> KeyPair<T> {
         let Header{ message_number, message_number_prev, ratchet_key : ref message_ratchet_key } = try!(
             axolotl_impl
                 .decode_header(&message)
@@ -254,7 +259,12 @@ impl <T:Axolotl> AxolotlState<T> {
             return self.try_decrypt_with_current_chain(axolotl_impl, message, mac, message_number, message_ratchet_key);
         }
 
-        self.try_decrypt_with_new_chain(axolotl_impl, message_number, message_number_prev, message_ratchet_key, message, mac)
+        self.try_decrypt_with_new_chain(axolotl_impl, keygen, message_number, message_number_prev, message_ratchet_key, message, mac)
+    }
+
+    pub fn decrypt(&mut self, axolotl_impl : &T, message : T::Message, mac : T::Mac
+    ) -> Result<T::PlainText,ReceiveError<T>> {
+        self.decrypt_with_keygen(axolotl_impl, |axolotl_impl| axolotl_impl.generate_ratchet_key_pair(), message, mac)
     }
 
     fn find_skipped_chain_index(
@@ -303,15 +313,16 @@ impl <T:Axolotl> AxolotlState<T> {
         current_chain.try_create_keys_and_decrypt(axolotl_impl, chain_key, message_number, message, mac, &self.session_identity)
     }
 
-    fn try_decrypt_with_new_chain(
+    fn try_decrypt_with_new_chain<Keygen>(
         &mut self, 
-        axolotl_impl : &T, 
+        axolotl_impl : &T,
+        keygen : Keygen,
         message_number : usize,
         message_number_prev : usize,
         message_ratchet_key : &T::PublicKey,
         message : T::Message, 
         mac : &T::Mac
-    ) -> Result<T::PlainText,ReceiveError<T>> {
+    ) -> Result<T::PlainText,ReceiveError<T>> where Keygen:FnOnce(&T) -> KeyPair<T> {
         let ratchet_key_derive_shared_secret = axolotl_impl.derive_shared_secret(&self.ratchet_key_send.key, message_ratchet_key);
         let (receiver_root_key, mut receiver_chain_key) = axolotl_impl.derive_next_root_key_and_chain_key(self.root_key.clone(), &ratchet_key_derive_shared_secret);
 
@@ -323,21 +334,22 @@ impl <T:Axolotl> AxolotlState<T> {
         try!(new_receive_chain.create_message_keys(axolotl_impl, &mut receiver_chain_key, message_number));
         let plaintext = try!(new_receive_chain.try_decrypt(axolotl_impl, message_number, message, mac, &self.session_identity));
 
-        try!(self.advance_ratchet(axolotl_impl, message_ratchet_key, receiver_root_key, new_receive_chain, receiver_chain_key, message_number_prev));
+        try!(self.advance_ratchet(axolotl_impl, keygen, message_ratchet_key, receiver_root_key, new_receive_chain, receiver_chain_key, message_number_prev));
 
         Ok(plaintext)
     }
 
-    fn advance_ratchet(
+    fn advance_ratchet<Keygen>(
         &mut self, 
-        axolotl_impl : &T, 
+        axolotl_impl : &T,
+        keygen : Keygen,
         message_ratchet_key : &T::PublicKey, 
         receiver_root_key : T::RootKey,
         new_receive_chain : ReceiveChain<T>,
         receiver_chain_key : T::ChainKey,
         message_number_prev : usize
-    ) -> Result<(), ReceiveError<T>> {
-        let new_ratchet_key_send = axolotl_impl.generate_ratchet_key_pair();
+    ) -> Result<(), ReceiveError<T>> where Keygen:FnOnce(&T) -> KeyPair<T> {
+        let new_ratchet_key_send = keygen(axolotl_impl);
         let new_ratchet_key_derive_shared_secret = axolotl_impl.derive_shared_secret(&new_ratchet_key_send.key, message_ratchet_key);
         let (root_key, chain_key_send) = axolotl_impl.derive_next_root_key_and_chain_key(receiver_root_key, &new_ratchet_key_derive_shared_secret);
         let truncate_to = axolotl_impl.skipped_chain_limit();
