@@ -146,7 +146,10 @@ impl<T:Axolotl> Clone for ReceiveChain<T> {
 
 
 /// initialize an axolotl session as the initiator.
-/// for simultanious initialization, which party is alice can be chosen in an arbitrary way, such as by comparing public keys.
+///
+/// #Notes
+///
+/// * for simultanious initialization, which party is alice can be chosen in an arbitrary way, such as by comparing public keys.
 /// 
 /// #Arguments
 /// 
@@ -205,8 +208,11 @@ pub fn init_as_alice_with_explicit_ratchet_keypair<T>(
 }
 
 /// initialize an axolotl session as the responder.
-/// for simultanious initialization, which party is bob can be chosen in an arbitrary way, such as by comparing public keys.
 /// 
+/// #Notes
+///
+/// * for simultanious initialization, which party is bob can be chosen in an arbitrary way, such as by comparing public keys.
+///
 /// #Arguments
 /// 
 /// * 'axolotl_impl' - an implementation of Axolotl to use for the session.
