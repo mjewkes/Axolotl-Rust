@@ -145,7 +145,19 @@ impl<T:Axolotl> Clone for ReceiveChain<T> {
 }
 
 
-
+/// initialize an axolotl session as the initiator.
+/// for simultanious initialization, which party is alice can be chosen in an arbitrary way, such as by comparing public keys.
+/// 
+/// #Arguments
+/// 
+/// * 'axolotl_impl' - an implementation of Axolotl to use for the session.
+/// * 'session_identity' - a per-session value used as a salt for the MAC
+/// * 'initial_secret' - the shared secret derived from the handshake (such as triple diffie hellman)
+/// * 'bob_ratchet_key_send' - the key that bob can use to send the first message. if alice is known to send first, this can be set to bob's ephemeral key.
+///
+/// #Return Value
+///
+/// * A session state used for sending and receiving messages
 pub fn init_as_alice<T>(
     axolotl_impl : &T,
     session_identity : T::SessionIdentity,
@@ -192,6 +204,19 @@ pub fn init_as_alice_with_explicit_ratchet_keypair<T>(
         }
 }
 
+/// initialize an axolotl session as the responder.
+/// for simultanious initialization, which party is bob can be chosen in an arbitrary way, such as by comparing public keys.
+/// 
+/// #Arguments
+/// 
+/// * 'axolotl_impl' - an implementation of Axolotl to use for the session.
+/// * 'session_identity' - a per-session value used as a salt for the MAC
+/// * 'initial_secret' - the shared secret derived from the handshake (such as triple diffie hellman)
+/// * 'bob_ratchet_key_send' - the key that bob can use to send the first message. if alice is known to send first, this can be set to bob's ephemeral key.
+///
+/// #Return Value
+///
+/// * A session state used for sending and receiving messages
 pub fn init_as_bob<T>(
     axolotl_impl : &T,
     session_identity : T::SessionIdentity,
@@ -303,6 +328,16 @@ impl <T:Axolotl> ReceiveChain<T> {
 }
 impl <T:Axolotl> AxolotlState<T> {
 
+    /// encrypt a plaintext message and advance session state
+    /// 
+    /// #Arguments
+    /// 
+    /// * 'axolotl_impl' - an implementation of Axolotl. should be identical to the one used to create the session.
+    /// * 'plaintext' - the plaintext message to encrypt
+    ///
+    /// #Return Value
+    ///
+    /// * on success, an encrypted and encoded message, and a MAC for it. otherwise, an error value.
     pub fn encrypt(&mut self, axolotl_impl : &T, plaintext : T::PlainText) -> Result<(T::Message, T::Mac), SendError<T>> {
         let (new_chain_key,result) = try!(self.encrypt_and_get_next_chain_key(axolotl_impl, plaintext));
         self.chain_key_send = new_chain_key;
@@ -328,6 +363,17 @@ impl <T:Axolotl> AxolotlState<T> {
         Ok((new_chain_key,(message,mac)))
     }
 
+    /// decrypt a message and advance session state
+    /// 
+    /// #Arguments
+    /// 
+    /// * 'axolotl_impl' - an implementation of Axolotl. should be identical to the one used to create the session
+    /// * 'message' - encrypted and encoded message received from the other party
+    /// * 'mac' - MAC received from the other party
+    ///
+    /// #Return Value
+    ///
+    /// * on success, a plaintext message. otherwise, an error value.
     pub fn decrypt(&mut self, axolotl_impl : &T, message : T::Message, ref mac : T::Mac
     ) -> Result<T::PlainText,ReceiveError<T>> {
         let Header{ message_number, message_number_prev, ratchet_key : ref message_ratchet_key } = try!(
