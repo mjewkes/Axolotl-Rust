@@ -114,20 +114,11 @@ impl PartialEq for PublicKey {
 }
 impl fmt::Debug for PublicKey {
     fn fmt(&self, f : &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        try!( write!(
-            f,
-            "[{:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, 
-              {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, 
-              {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, {:?}, 
-              {:?}, {:?}, {:?}]",
-            self.val[ 0], self.val[ 1], self.val[ 2], self.val[ 3], self.val[ 4],
-            self.val[ 5], self.val[ 6], self.val[ 7], self.val[ 8], self.val[ 9],
-            self.val[10], self.val[11], self.val[12], self.val[13], self.val[14],
-            self.val[15], self.val[16], self.val[17], self.val[18], self.val[19],
-            self.val[20], self.val[21], self.val[22], self.val[23], self.val[24],
-            self.val[25], self.val[26], self.val[27], self.val[28], self.val[29],
-            self.val[30], self.val[31], self.val[32]
-        ));
+        try!(f.write_str("[ "));
+        for i in 0..PUB_KEY_LEN {
+            try!(write!(f, "{:?} ", self.val[i]));
+        }
+        try!(f.write_str("]"));
         Ok(())
     }
 }
