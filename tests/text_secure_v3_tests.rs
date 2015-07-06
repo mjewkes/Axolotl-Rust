@@ -1,3 +1,4 @@
+extern crate rustc_serialize;
 mod whisper_protocol;
 
 use whisper_protocol::{axolotl};

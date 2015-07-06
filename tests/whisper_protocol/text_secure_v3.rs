@@ -25,15 +25,15 @@ const KEY_LEN_IV    : usize = 16;
 const SEED_NULL     : [u8;1] = [0]; 
 const SEED_MSG_KEY  : [u8;1] = [1];
 const SEED_CHAIN_KEY: [u8;1] = [2];
-
+#[derive(RustcEncodable, RustcDecodable)]
 pub struct TextSecureV3;
 
 
 
-#[derive(Clone)]
+#[derive(Clone, RustcEncodable, RustcDecodable)]
 pub struct Rootkey ([u8;32]);
 
-#[derive(Clone)]
+#[derive(Clone, RustcEncodable, RustcDecodable)]
 pub struct ChainKey ([u8;KEY_LEN_CHAIN]);          // Should this have an indexVariable?
 
 impl ChainKey {
@@ -48,7 +48,7 @@ impl ChainKey {
         to_array!(hmac_context.result().code()[..],KEY_LEN_CHAIN)
     }
 }
-#[derive(Clone)]
+#[derive(Clone, RustcEncodable, RustcDecodable)]
 pub struct MessageKey{
     cipher_key : [u8;32],
     mac_key : [u8;32],

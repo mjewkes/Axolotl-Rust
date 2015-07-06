@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::result::Result;
+use rustc_serialize::{Encodable,Encoder,Decodable,Decoder};
 use super::axolotl::{Axolotl, Header, SendError, ReceiveError};
 use super::key_pair::KeyPair;
 
@@ -16,10 +17,121 @@ pub struct AxolotlState<T> where T:Axolotl {
     current_receive_chain : Option<(ReceiveChain<T>, T::ChainKey)>,
 }
 
+impl<T:Axolotl> Encodable for AxolotlState<T> {
+    fn encode<S: Encoder>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.emit_struct("AxolotlState", 8, |s| {
+            try!(s.emit_struct_field("root_key", 0, |s| {
+                self.root_key.encode(s)
+            }));
+            try!(s.emit_struct_field("session_identity", 1, |s| {
+                self.session_identity.encode(s)
+            }));
+            try!(s.emit_struct_field("message_number_send", 2, |s| {
+                self.message_number_send.encode(s)
+            }));
+            try!(s.emit_struct_field("message_number_prev", 3, |s| {
+                self.message_number_prev.encode(s)
+            }));
+            try!(s.emit_struct_field("chain_key_send", 4, |s| {
+                self.chain_key_send.encode(s)
+            }));
+            try!(s.emit_struct_field("ratchet_key_send", 5, |s| {
+                self.ratchet_key_send.encode(s)
+            }));
+            try!(s.emit_struct_field("skipped_receive_chains", 6, |s| {
+                self.skipped_receive_chains.encode(s)
+            }));
+            try!(s.emit_struct_field("current_receive_chain", 7, |s| {
+                self.current_receive_chain.encode(s)
+            }));
+            Ok(())
+        })
+    }
+}
+
+impl<T:Axolotl> Decodable for AxolotlState<T> {
+    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+        d.read_struct("AxolotlState", 8, |d| {
+            let root_key = try!(d.read_struct_field("root_key", 0, |d| {
+                Decodable::decode(d)
+            }));
+            let session_identity = try!(d.read_struct_field("session_identity", 1, |d| {
+                Decodable::decode(d)
+            }));
+            let message_number_send = try!(d.read_struct_field("message_number_send", 2, |d| {
+                Decodable::decode(d)
+            }));
+            let message_number_prev = try!(d.read_struct_field("message_number_prev", 3, |d| {
+                Decodable::decode(d)
+            }));
+            let chain_key_send = try!(d.read_struct_field("chain_key_send", 4, |d| {
+                Decodable::decode(d)
+            }));
+            let ratchet_key_send = try!(d.read_struct_field("ratchet_key_send", 5, |d| {
+                Decodable::decode(d)
+            }));
+            let skipped_receive_chains = try!(d.read_struct_field("skipped_receive_chains", 6, |d| {
+                Decodable::decode(d)
+            }));
+            let current_receive_chain = try!(d.read_struct_field("current_receive_chain", 7, |d| {
+                Decodable::decode(d)
+            }));
+            Ok(AxolotlState{
+                root_key:root_key,
+                session_identity:session_identity,
+                message_number_send:message_number_send,
+                message_number_prev:message_number_prev,
+                chain_key_send:chain_key_send,
+                ratchet_key_send:ratchet_key_send,
+                skipped_receive_chains:skipped_receive_chains,
+                current_receive_chain:current_receive_chain,
+            })
+        })
+    }
+}
+
 struct ReceiveChain<T> where T:Axolotl {
     next_chain_key_index : usize,
     ratchet_key : T::PublicKey,
     message_keys : HashMap<usize,T::MessageKey>,
+}
+
+impl<T:Axolotl> Encodable for ReceiveChain<T> {
+    fn encode<S: Encoder>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.emit_struct("ReceiveChain", 3, |s| {
+            try!(s.emit_struct_field("next_chain_key_index", 0, |s| {
+                self.next_chain_key_index.encode(s)
+            }));
+            try!(s.emit_struct_field("ratchet_key", 1, |s| {
+                self.ratchet_key.encode(s)
+            }));
+            try!(s.emit_struct_field("message_keys", 2, |s| {
+                self.message_keys.encode(s)
+            }));
+            Ok(())
+        })
+    }
+}
+
+impl<T:Axolotl> Decodable for ReceiveChain<T> {
+    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+        d.read_struct("ReceiveChain", 3, |d| {
+            let next_chain_key_index = try!(d.read_struct_field("next_chain_key_index", 0, |d| {
+                Decodable::decode(d)
+            }));
+            let ratchet_key = try!(d.read_struct_field("ratchet_key", 1, |d| {
+                Decodable::decode(d)
+            }));
+            let message_keys = try!(d.read_struct_field("message_keys", 2, |d| {
+                Decodable::decode(d)
+            }));
+            Ok(ReceiveChain{
+                next_chain_key_index:next_chain_key_index,
+                ratchet_key:ratchet_key,
+                message_keys:message_keys,
+            })
+        })
+    }
 }
 
 impl<T:Axolotl> Clone for ReceiveChain<T> {

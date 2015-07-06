@@ -1,18 +1,20 @@
 use std::fmt;
 use std::result::{Result};
 
+use rustc_serialize::{Encodable,Decodable};
+
 use super::key_pair::KeyPair;
 
 pub trait Axolotl {
-    type PrivateKey : Clone;
-    type PublicKey : Clone;
+    type PrivateKey : Clone + Decodable + Encodable;
+    type PublicKey : Clone + Decodable + Encodable;
     type SharedSecret : Clone;
     type InitialSharedSecret;
-    type SessionIdentity;
+    type SessionIdentity : Decodable + Encodable;
 
-    type RootKey : Clone;
-    type ChainKey : Clone;
-    type MessageKey : Clone;
+    type RootKey : Clone + Decodable + Encodable;
+    type ChainKey : Clone + Decodable + Encodable;
+    type MessageKey : Clone + Decodable + Encodable;
 
     type PlainText;
     type CipherText;
