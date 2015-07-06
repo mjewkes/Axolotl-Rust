@@ -22,28 +22,6 @@ struct ReceiveChain<T> where T:Axolotl {
     message_keys : HashMap<usize,T::MessageKey>,
 }
 
-impl_axolotl_serde!{
-    receive_chain_serde {
-        ReceiveChain {
-            next_chain_key_index,
-            ratchet_key,
-            message_keys
-        }
-    }
-    axolotl_state_serde {
-        AxolotlState { 
-            root_key, 
-            session_identity, 
-            message_number_send, 
-            message_number_prev,
-            chain_key_send,
-            ratchet_key_send,
-            skipped_receive_chains,
-            current_receive_chain
-        }
-    }
-}
-
 impl<T:Axolotl> Clone for ReceiveChain<T> {
     fn clone(&self) -> Self {
         ReceiveChain{
