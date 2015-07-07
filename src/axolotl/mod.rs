@@ -1,6 +1,3 @@
-#[macro_use]
-mod serde_macros;
-
 mod axolotl;
 mod state;
 mod key_pair;

@@ -54,7 +54,7 @@ pub fn generate_private_key() -> PrivateKey{
     PrivateKey::from_bytes(*private_key)
 }
 
-#[derive(Clone,PartialEq,Serialize,Deserialize)]
+#[derive(Clone,PartialEq)]
 pub struct PublicKey {
     val: [u8;PUB_KEY_LEN],
 }
@@ -68,7 +68,7 @@ impl PublicKey {
     }
 }
 
-#[derive(Clone,Serialize,Deserialize)]
+#[derive(Clone)]
 pub struct PrivateKey {
     val: [u8;PRIV_KEY_LEN],
 }

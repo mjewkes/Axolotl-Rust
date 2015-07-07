@@ -1,30 +1,29 @@
 use std::fmt;
 use std::result::{Result};
 
-use serde::{Serialize,Deserialize};
 use super::key_pair::KeyPair;
 
-pub trait Axolotl : 'static {
-    type PrivateKey : Clone + Serialize + Deserialize + 'static;
-    type PublicKey : Clone + Serialize + Deserialize + 'static;
-    type SharedSecret : Clone + 'static;
-    type InitialSharedSecret : 'static;
-    type SessionIdentity : Serialize + Deserialize + 'static;
+pub trait Axolotl {
+    type PrivateKey : Clone;
+    type PublicKey : Clone;
+    type SharedSecret : Clone;
+    type InitialSharedSecret;
+    type SessionIdentity;
 
-    type RootKey : Clone + Serialize + Deserialize + 'static;
-    type ChainKey : Clone + Serialize + Deserialize + 'static;
-    type MessageKey : Clone + Serialize + Deserialize + 'static;
+    type RootKey : Clone;
+    type ChainKey : Clone;
+    type MessageKey : Clone;
 
-    type PlainText : 'static;
-    type CipherText : 'static;
-    type Message : 'static;
+    type PlainText;
+    type CipherText;
+    type Message;
 
-    type Mac : PartialEq + 'static;
+    type Mac : PartialEq;
 
-    type EncryptError : fmt::Debug + 'static;
-    type EncodeError : fmt::Debug + 'static;
-    type DecryptError : fmt::Debug + 'static;
-    type DecodeError : fmt::Debug + 'static;
+    type EncryptError : fmt::Debug;
+    type EncodeError : fmt::Debug;
+    type DecryptError : fmt::Debug;
+    type DecodeError : fmt::Debug;
 
     fn derive_initial_root_key_and_chain_key(
         &self, Self::InitialSharedSecret) 
