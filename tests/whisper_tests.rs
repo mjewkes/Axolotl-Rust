@@ -1,5 +1,6 @@
 extern crate protobuf;
 extern crate rand;
+extern crate rustc_serialize;
 
 mod whisper_protocol;
 

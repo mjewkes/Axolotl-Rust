@@ -3,6 +3,7 @@
 /// TODO: Should be pulled into it's own project
 
 extern crate rand;
+use rustc_serialize::{Encodable, Encoder, Decodable, Decoder};
 use self::rand::{OsRng, Rng};
 use std::fmt;
 
@@ -61,7 +62,6 @@ pub fn generate_private_key() -> PrivateKey{
     PrivateKey::from_bytes(*private_key)
 }
 
-#[derive(Clone,PartialEq, RustcEncodable, RustcDecodable)]
 pub struct PublicKey {
     val: [u8;PUB_KEY_LEN],
 }
@@ -110,6 +110,35 @@ impl PartialEq for PublicKey {
             }
         }
         true
+    }
+}
+impl Encodable for PublicKey {
+    fn encode<S: Encoder>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.emit_seq(PUB_KEY_LEN, |s| {
+            for i in 0..PUB_KEY_LEN {
+                try!(s.emit_seq_elt(i, |s| {
+                    self.val[i].encode(s)
+                }));
+            }
+            Ok(())
+        })
+    }
+}
+
+impl Decodable for PublicKey {
+    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+        d.read_seq(|d,len| {
+            if len != PUB_KEY_LEN {
+                return Err(d.error("incorrect length"));
+            }
+            let mut new_buf : [u8;PUB_KEY_LEN] = [0;PUB_KEY_LEN];
+            for i in 0..PUB_KEY_LEN{
+                new_buf[i] = try!(d.read_seq_elt(i, |d| {
+                    Decodable::decode(d)
+                }));
+            }
+            Ok(PublicKey{val: new_buf})
+        })
     }
 }
 impl fmt::Debug for PublicKey {
