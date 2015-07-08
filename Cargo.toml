@@ -11,8 +11,10 @@ build = "build.rs"
 gcc = "0.3"
 
 [dependencies]
-rust-crypto = "*"
 rustc-serialize = "0.3"
 rand = "*"
 
+[dev-dependencies]
+protobuf = "1.0.0"
+rust-crypto = "*"
 

@@ -3,42 +3,50 @@
 /// TODO: Should be pulled into it's own project
 
 extern crate rand;
+use rustc_serialize::{Encodable, Encoder, Decodable, Decoder};
 use self::rand::{OsRng, Rng};
+use std::fmt;
 
-pub const PUB_KEY_LEN : usize = 32;
-pub const PRIV_KEY_LEN : usize = 32;
-pub const SHARED_KEY_LEN : usize = 32;
+pub const BASE_POINT_LEN    : usize = 32;
+pub const PRIV_KEY_LEN      : usize = 32;
+pub const PUB_KEY_LEN       : usize = 33;
+pub const SHARED_KEY_LEN    : usize = 32;
+
+
+pub const DJB_TYPE : u8 = 0x05;
 
 #[link(name = "curve25519-donna")]
 extern {
-    #[link_name(curve25519_donna)]  // TODO: Doesn't seem to work yet.
     fn curve25519_donna(output: *mut u8, a : *const u8, b : *const u8);
-
-//     extern int  curve25519_sign(unsigned char* signature_out, /* 64 bytes */
-//                      const unsigned char* curve25519_privkey,  32 bytes 
-//                      const unsigned char* msg, const unsigned long msg_len,
-//                      const unsigned char* random); /* 64 bytes */
-
 }
 
-fn invoke_curve25519_donna( a: &[u8;32],  b: &[u8;32]) -> [u8;32] {
-    let mut out : [u8;32] = [0;32];
+fn invoke_curve25519_donna_for_publickey( a: &[u8;PRIV_KEY_LEN],  b: &[u8;BASE_POINT_LEN]) -> [u8;PUB_KEY_LEN] {
+    let mut out : [u8;PUB_KEY_LEN] = [0;PUB_KEY_LEN];
+    out[0] = DJB_TYPE;
     unsafe {
-        curve25519_donna(&mut out[0],&a[0],&b[0]);
+        curve25519_donna(&mut out[1],&a[0],&b[0]);
+    }
+    out
+}
+
+fn invoke_curve25519_donna_for_sharedkey( a: &[u8;PRIV_KEY_LEN],  b: &[u8;PUB_KEY_LEN]) -> [u8;SHARED_KEY_LEN] {
+    let mut out : [u8;SHARED_KEY_LEN] = [0;SHARED_KEY_LEN];
+    unsafe {
+        curve25519_donna(&mut out[0],&a[0],&b[1]);
     }
     out
 }
 
 pub fn derive_public_key( private_key: &PrivateKey) -> PublicKey {
     // PublicKey gen as outlined by https://code.google.com/p/curve25519-donna/
-    let ref basepoint : [u8;32] = [ 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-                                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-                                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ];
-    PublicKey{val: invoke_curve25519_donna(&private_key.val,basepoint)}
+    let ref basepoint : [u8;BASE_POINT_LEN] = [ 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+                                                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+                                                0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ];
+    PublicKey{val: invoke_curve25519_donna_for_publickey(&private_key.val,basepoint)}
 }
 
 pub fn derive_shared_key( private_key: &PrivateKey, remote_public_key : &PublicKey ) -> SharedKey {
-    SharedKey{val: invoke_curve25519_donna(&private_key.val,remote_public_key.to_bytes())}
+    SharedKey{val: invoke_curve25519_donna_for_sharedkey(&private_key.val,remote_public_key.to_bytes())}
 }
 
 pub fn generate_private_key() -> PrivateKey{
@@ -54,17 +62,93 @@ pub fn generate_private_key() -> PrivateKey{
     PrivateKey::from_bytes(*private_key)
 }
 
-#[derive(Clone,PartialEq, RustcEncodable, RustcDecodable)]
 pub struct PublicKey {
     val: [u8;PUB_KEY_LEN],
 }
 impl PublicKey {
     pub fn from_bytes(bytes : [u8 ; PUB_KEY_LEN]) -> Self {
+        assert_eq!(DJB_TYPE,bytes[0]);
         PublicKey{val: bytes}
     }
-    
+    pub fn copy_from_bytes(bytes : &[u8]) -> Self{
+        assert_eq!(bytes.len(), PUB_KEY_LEN);
+
+        let mut new_buf : [u8;PUB_KEY_LEN] = [0;PUB_KEY_LEN];
+        for i in 0.. PUB_KEY_LEN {
+            new_buf[i] = bytes[i];
+        }
+        PublicKey::from_bytes(new_buf)
+    }
     pub fn to_bytes(&self) -> &[u8;PUB_KEY_LEN] {
         &self.val
+    }
+
+    pub fn from_untyped_bytes(bytes : [u8 ; PUB_KEY_LEN-1]) -> Self{
+        let mut new_buf : [u8;PUB_KEY_LEN] = [0;PUB_KEY_LEN];
+        new_buf[0] = DJB_TYPE;
+
+        for i in 1.. PUB_KEY_LEN {
+            new_buf[i] = bytes[i-1];
+        }
+        PublicKey::from_bytes(new_buf)
+    }
+}
+impl Clone for PublicKey {
+    fn clone(&self) -> Self{
+        let mut new_buf : [u8;PUB_KEY_LEN] = [0;PUB_KEY_LEN];
+        for i in 0..self.val.len(){
+            new_buf[i] = self.val[i];
+        }
+        PublicKey{val: new_buf}
+    }
+}
+impl PartialEq for PublicKey {
+    fn eq(&self, other: &Self) -> bool{
+        for i in 0..self.val.len(){
+            if self.val[i] != other.val[i] {
+                return false;
+            }
+        }
+        true
+    }
+}
+impl Encodable for PublicKey {
+    fn encode<S: Encoder>(&self, s: &mut S) -> Result<(), S::Error> {
+        s.emit_seq(PUB_KEY_LEN, |s| {
+            for i in 0..PUB_KEY_LEN {
+                try!(s.emit_seq_elt(i, |s| {
+                    self.val[i].encode(s)
+                }));
+            }
+            Ok(())
+        })
+    }
+}
+
+impl Decodable for PublicKey {
+    fn decode<D: Decoder>(d: &mut D) -> Result<Self, D::Error> {
+        d.read_seq(|d,len| {
+            if len != PUB_KEY_LEN {
+                return Err(d.error("incorrect length"));
+            }
+            let mut new_buf : [u8;PUB_KEY_LEN] = [0;PUB_KEY_LEN];
+            for i in 0..PUB_KEY_LEN{
+                new_buf[i] = try!(d.read_seq_elt(i, |d| {
+                    Decodable::decode(d)
+                }));
+            }
+            Ok(PublicKey{val: new_buf})
+        })
+    }
+}
+impl fmt::Debug for PublicKey {
+    fn fmt(&self, f : &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        try!(f.write_str("[ "));
+        for i in 0..PUB_KEY_LEN {
+            try!(write!(f, "{:?} ", self.val[i]));
+        }
+        try!(f.write_str("]"));
+        Ok(())
     }
 }
 
@@ -99,20 +183,22 @@ mod tests {
     #[test]
     fn shared_kat(){
 
-        let alice_public_bytes: [u8;PUB_KEY_LEN] =     [0x1b, 0xb7, 0x59, 0x66, 0xf2, 0xe9, 0x3a, 0x36, 0x91, 0xdf, 
-                                                        0xff, 0x94, 0x2b, 0xb2, 0xa4, 0x66, 0xa1, 0xc0, 0x8b, 0x8d, 
-                                                        0x78, 0xca, 0x3f, 0x4d, 0x6d, 0xf8, 0xb8, 0xbf, 0xa2, 0xe4, 
-                                                        0xee, 0x28];
+        let alice_public_bytes: [u8;PUB_KEY_LEN] =     [0x05, 0x1b, 0xb7, 0x59, 0x66, 0xf2, 0xe9, 0x3a, 0x36, 0x91,
+                                                        0xdf, 0xff, 0x94, 0x2b, 0xb2, 0xa4, 0x66, 0xa1, 0xc0, 0x8b, 
+                                                        0x8d, 0x78, 0xca, 0x3f, 0x4d, 0x6d, 0xf8, 0xb8, 0xbf, 0xa2,
+                                                        0xe4, 0xee, 0x28];
+                                                       
 
         let alice_private_bytes: [u8;PRIV_KEY_LEN] =   [0xc8, 0x06, 0x43, 0x9d, 0xc9, 0xd2, 0xc4, 0x76, 0xff, 0xed,
                                                         0x8f, 0x25, 0x80, 0xc0, 0x88, 0x8d, 0x58, 0xab, 0x40, 0x6b, 
                                                         0xf7, 0xae, 0x36, 0x98, 0x87, 0x90, 0x21, 0xb9, 0x6b, 0xb4, 
                                                         0xbf, 0x59];
 
-        let bob_public_bytes: [u8;PUB_KEY_LEN] =       [0x65, 0x36, 0x14, 0x99, 0x3d, 0x2b, 0x15, 0xee, 0x9e, 0x5f,
-                                                        0xd3, 0xd8, 0x6c, 0xe7, 0x19, 0xef, 0x4e, 0xc1, 0xda, 0xae, 
-                                                        0x18, 0x86, 0xa8, 0x7b, 0x3f, 0x5f, 0xa9, 0x56, 0x5a, 0x27, 
-                                                        0xa2, 0x2f];
+        let bob_public_bytes: [u8;PUB_KEY_LEN] =       [0x05, 0x65, 0x36, 0x14, 0x99, 0x3d, 0x2b, 0x15, 0xee, 0x9e,
+                                                        0x5f, 0xd3, 0xd8, 0x6c, 0xe7, 0x19, 0xef, 0x4e, 0xc1, 0xda,
+                                                        0xae, 0x18, 0x86, 0xa8, 0x7b, 0x3f, 0x5f, 0xa9, 0x56, 0x5a,
+                                                        0x27, 0xa2, 0x2f];
+                                                        
 
         let bob_private_bytes: [u8;PRIV_KEY_LEN] =     [0xb0, 0x3b, 0x34, 0xc3, 0x3a, 0x1c, 0x44, 0xf2, 0x25, 0xb6, 
                                                         0x62, 0xd2, 0xbf, 0x48, 0x59, 0xb8, 0x13, 0x54, 0x11, 0xfa, 
@@ -135,9 +221,9 @@ mod tests {
         let alice_shared = derive_shared_key(&alice_priv,&bob_pub);
         let bob_shared   = derive_shared_key(&bob_priv,&alice_pub);
         
-        assert_eq!(alice_pub.to_bytes() , derive_public_key(&alice_priv).to_bytes());
-        assert_eq!(bob_pub.to_bytes() , derive_public_key(&bob_priv).to_bytes());
-        assert!(alice_pub.to_bytes() != derive_public_key(&bob_priv).to_bytes());
+        assert_eq!(alice_pub , derive_public_key(&alice_priv));
+        assert_eq!(bob_pub , derive_public_key(&bob_priv));
+        assert!(alice_pub != derive_public_key(&bob_priv));
 
         assert_eq!(alice_shared.to_bytes(),bob_shared.to_bytes());
         assert_eq!(bob_shared.to_bytes(), expected_shared.to_bytes());
@@ -158,7 +244,8 @@ mod tests {
     }
 
     fn to_pub(key: &SharedKey) -> PublicKey{
-        PublicKey{val: *key.to_bytes()}
+        let x = key.val.clone();
+        PublicKey::from_untyped_bytes(x)
     }
 
     const LOOP_ITERATIONS : u32 = 10;
@@ -170,9 +257,9 @@ mod tests {
                 
         for __ in 0 .. LOOP_ITERATIONS {
 
-            let e1k   = derive_shared_key(&PrivateKey::from_bytes(e1),&PublicKey::from_bytes(k));
+            let e1k   = derive_shared_key(&PrivateKey::from_bytes(e1),&PublicKey::from_untyped_bytes(k));
             let e2e1k = derive_shared_key(&PrivateKey::from_bytes(e2),&to_pub(&e1k));
-            let e2k   = derive_shared_key(&PrivateKey::from_bytes(e2),&PublicKey::from_bytes(k));
+            let e2k   = derive_shared_key(&PrivateKey::from_bytes(e2),&PublicKey::from_untyped_bytes(k));
             let e1e2k = derive_shared_key(&PrivateKey::from_bytes(e1),&to_pub(&e2k));
 
             assert_eq!(e1e2k.to_bytes(),e2e1k.to_bytes());

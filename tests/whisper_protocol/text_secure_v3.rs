@@ -1,7 +1,8 @@
-extern crate raxolotl;
-pub use self::raxolotl::axolotl::{Axolotl,Header,KeyPair};
+pub use protobuf::core::Message;
 
-use whisper_protocol::crypto_wrappers::{aes_cbc,curve25519,hkdf,hmac};
+    use whisper_protocol::crypto_wrappers::{aes_cbc,curve25519,hkdf,hmac};
+pub use whisper_protocol::raxolotl::axolotl::{Axolotl,Header,KeyPair};
+pub use super::WhisperTextProtocol::WhisperMessage;
 
 
 #[macro_export]
@@ -15,6 +16,7 @@ macro_rules! to_array(
     });
 );
 
+const TRUNCATED_MAC_LEN : usize = 8;
 
 const KEY_LEN_CHAIN : usize = 32;
 const KEY_LEN_ROOT  : usize = 32;
@@ -27,8 +29,10 @@ const SEED_MSG_KEY  : [u8;1] = [1];
 const SEED_CHAIN_KEY: [u8;1] = [2];
 #[derive(RustcEncodable, RustcDecodable)]
 pub struct TextSecureV3;
-
-
+impl TextSecureV3 {
+    #[inline]
+    pub fn version_num(&self) -> u8 { 3 }
+}
 
 #[derive(Clone, RustcEncodable, RustcDecodable)]
 pub struct Rootkey ([u8;32]);
@@ -54,6 +58,62 @@ pub struct MessageKey{
     mac_key : [u8;32],
     iv : [u8;16],
 }
+#[derive(Clone)]
+#[derive(Debug)]
+#[derive(PartialEq)]
+pub struct TransportPacket {
+    version: u8,
+    payload : WhisperMessage,
+    mac : Option<Vec<u8>>,
+}
+
+impl TransportPacket {
+    pub fn new(version : u8 ) -> Self {
+        TransportPacket{
+            version:version,
+            payload : WhisperMessage::new(),
+            mac : None,
+        }
+    }
+
+    pub fn from_bytes( bytes : &[u8]) -> Result<Self,()> {
+        let (version, payload_bytes, mac) = TransportPacket::partition_packed_bytes(bytes);
+
+        let mut tp = TransportPacket::new(deserialize_version(version));
+        if tp.payload.merge_from_bytes(payload_bytes).is_err() {
+            return Err(());
+        }
+        tp.mac = Some(mac.to_vec());
+        
+        Ok(tp)
+    }
+
+    pub fn set_mac(self : &mut Self,mac : Vec<u8>){
+        self.mac = Some(mac);
+    }
+
+    pub fn take_mac(self : &mut Self) -> Option<Vec<u8>>{
+        self.mac.take()
+    }
+    
+    pub fn to_vec(self : Self) -> Vec<u8>{
+        let mut v = Vec::<u8>::new();
+        v.push(serialize_version(self.version));
+
+        let payload = self.payload.write_to_bytes().ok().unwrap();
+        for x in payload {
+            v.push(x);
+        }
+        for x in self.mac.unwrap(){
+            v.push(x);
+        }
+        v
+    }
+
+    fn partition_packed_bytes(bytes: &[u8]) -> (u8,&[u8],&[u8]) {
+        (bytes[0], &bytes[1..bytes.len() - TRUNCATED_MAC_LEN], &bytes[bytes.len() - TRUNCATED_MAC_LEN..] )
+    }
+}
 
 #[derive(Clone)]
 pub struct PlainText(pub Vec<u8>);
@@ -62,20 +122,6 @@ impl PlainText {
     pub fn from_vec(data : Vec<u8>) -> PlainText {
         PlainText(data)
     }
-}
-
-#[derive(Clone)]
-pub struct CipherTextAndVersion{
-    pub cipher_text : Vec<u8>,
-    version : u8,
-}
-
-#[derive(Clone)]
-pub struct Message {
-    pub message_number : usize,
-    pub message_number_prev : usize,
-    pub ratchet_key : curve25519::PublicKey,
-    pub ciphertext : CipherTextAndVersion,
 }
 
 impl Axolotl for TextSecureV3{
@@ -91,10 +137,10 @@ impl Axolotl for TextSecureV3{
     type MessageKey = MessageKey;
 
     type PlainText = PlainText;
-    type CipherText = CipherTextAndVersion;
-    type Message = Message;
+    type CipherText = Vec<u8>;
+    type Message = TransportPacket;
 
-    type Mac = hmac::MacResult;
+    type Mac = Vec<u8>;
 
     type EncryptError = ();
     type EncodeError = ();
@@ -139,10 +185,7 @@ impl Axolotl for TextSecureV3{
         let PlainText(ref text) = plaintext;
         let ciphertext = aes_cbc::encrypt_aes256_cbc_mode(text,message_key.cipher_key, message_key.iv);
         
-        Ok(CipherTextAndVersion {
-            version : 3,
-            cipher_text : ciphertext,
-        })
+        Ok(ciphertext)
     }
 
     fn decrypt_message(
@@ -150,11 +193,7 @@ impl Axolotl for TextSecureV3{
         message_key : &Self::MessageKey, 
         ciphertext : Self::CipherText
     ) -> Result<Self::PlainText,()>{
-        if ciphertext.version != 3 {
-            return Err(());
-        }
-
-        let result = aes_cbc::decrypt_aes256_cbc_mode(&ciphertext.cipher_text, message_key.cipher_key, message_key.iv);
+        let result = aes_cbc::decrypt_aes256_cbc_mode(&ciphertext, message_key.cipher_key, message_key.iv);
         Ok(PlainText(result))
     }
 
@@ -165,10 +204,14 @@ impl Axolotl for TextSecureV3{
         session_identity : &Self::SessionIdentity
     ) -> Self::Mac{
 
+        let mut serialized = Vec::<u8>::new();
+        serialized.push(serialize_version(self.version_num()));
+        message.payload.write_to_vec(&mut serialized).ok();
+       
         let mut mac_state = hmac::HmacSha256::new(&message_key.mac_key);
         mac_state.input(&session_identity[..]);
-        mac_state.input(&message.ciphertext.cipher_text[..]); //TODO: input the version
-        hmac::truncate_mac_result(mac_state.result(), 8)
+        mac_state.input(&serialized[..]);
+        hmac::truncate_mac_result(mac_state.result(), 8).code().to_vec()
     }
 
     fn encode_header_and_ciphertext(
@@ -176,26 +219,35 @@ impl Axolotl for TextSecureV3{
         header : Header<Self>,
         ciphertext : Self::CipherText
     ) -> Result<Self::Message, Self::EncodeError> {
-        Ok(Message {
-            message_number : header.message_number,
-            message_number_prev : header.message_number_prev,
-            ratchet_key : header.ratchet_key,
-            ciphertext : ciphertext,
-        })
+        let mut msg = TransportPacket::new(self.version_num());
+
+        msg.payload.set_counter(header.message_number as u32);
+        msg.payload.set_previousCounter(header.message_number_prev as u32);
+        msg.payload.set_ciphertext(ciphertext);
+
+        let ratchet = header.ratchet_key.to_bytes();
+        let mut v = Vec::<u8>::with_capacity(ratchet.len());
+        for x in ratchet.iter(){
+            v.push(*x);
+        }
+        msg.payload.set_ratchetKey(v);         // Can we move from the Header
+
+        Ok(msg)
     }
 
     fn decode_header(&self, message : &Self::Message
     ) -> Result<Header<Self>,Self::DecodeError> {
         Ok(Header{ 
-            message_number : message.message_number, 
-            message_number_prev : message.message_number_prev, 
-            ratchet_key : message.ratchet_key.clone(),
+            message_number : message.payload.get_counter() as usize, 
+            message_number_prev : message.payload.get_previousCounter() as usize, 
+            ratchet_key : Self::PublicKey::copy_from_bytes(message.payload.get_ratchetKey()),
         })
     }
 
     fn decode_ciphertext(&self, message : Self::Message
     ) -> Result<Self::CipherText,()> {
-        Ok(message.ciphertext)
+        let mut m = message;
+        Ok(m.payload.take_ciphertext())
     }
 
     fn ratchet_keys_are_equal(&self, key0 : &Self::PublicKey, key1 : &Self::PublicKey) -> bool{
@@ -215,8 +267,7 @@ impl Axolotl for TextSecureV3{
     fn future_message_limit(&self) -> usize{
         2000
     }
-    fn chain_message_limit(&self) -> usize
-    {
+    fn chain_message_limit(&self) -> usize{
         usize::max_value()
     }
 
@@ -259,4 +310,11 @@ fn split_raw_msg_keys(bytes: [u8; KEY_LEN_CIPHER+KEY_LEN_MAC+KEY_LEN_IV]) -> ([u
     let iv          : [u8; KEY_LEN_IV]     = to_array!( bytes[     MAC_OFFSET..                 ]   , KEY_LEN_IV );
 
     (cipher_key,mac_key,iv)
+}
+
+pub fn serialize_version(version : u8) -> u8{
+    (version << 4 | 3) as u8 
+}
+pub fn deserialize_version(serialized : u8) -> u8{
+    (serialized >> 4 ) as u8 
 }
