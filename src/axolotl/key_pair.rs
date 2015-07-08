@@ -1,8 +1,11 @@
 use rustc_serialize::{Encodable,Encoder,Decodable,Decoder};
 use super::axolotl::Axolotl;
 
+/// Holds a key and a public key for a diffie hellman or elliptic curve diffie hellman implementation.
 pub struct KeyPair<T> where T:Axolotl {
+	/// The private key
     pub key : T::PrivateKey,
+    /// The public key
     pub public : T::PublicKey,
 }
 
