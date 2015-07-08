@@ -5,6 +5,7 @@ use rustc_serialize::{Encodable,Decodable};
 
 use super::key_pair::KeyPair;
 
+/// An implementation of the [Axolotl protocol](https://github.com/trevp/axolotl/wiki).
 pub trait Axolotl {
     /// The diffie hellman or elliptic curve diffie hellman private key.
     type PrivateKey : Clone + Decodable + Encodable;
