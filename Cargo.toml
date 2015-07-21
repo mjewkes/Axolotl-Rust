@@ -11,7 +11,7 @@ build = "build.rs"
 gcc = "0.3"
 
 [dependencies]
-rustc-serialize = "0.3"
+rustc-serialize = "0.3.15"
 rand = "*"
 
 [dev-dependencies]
